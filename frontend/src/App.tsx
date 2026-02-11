@@ -158,10 +158,7 @@ export default function App() {
   const [leaderboardMyEntry, setLeaderboardMyEntry] = useState<LeaderboardEntry | null>(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
-  const [poolStats, setPoolStats] = useState<{ paidPlayers: number; totalMon: string }>({
-    paidPlayers: 0,
-    totalMon: "0"
-  });
+  const [totalMonPool, setTotalMonPool] = useState("0");
 
   useEffect(() => {
     if (!gameRef.current) {
@@ -845,7 +842,7 @@ export default function App() {
       try {
         const res = await fetchPoolStats();
         if (!cancelled) {
-          setPoolStats({ paidPlayers: res.paidPlayers, totalMon: res.totalMon });
+          setTotalMonPool(res.totalMon);
         }
       } catch {
         // Keep last known stats if request fails.
@@ -965,12 +962,8 @@ export default function App() {
           {!assetsReady && (
             <div className="bg-load-stripe" style={{ width: `${Math.round(bgLoadProgress * 100)}%` }} />
           )}
-          <div className="pool-widget" title="Prize pool from verified MON entry payments">
-            <img src="/assets/ui/pool.avif" alt="Pool" className="pool-widget-bg" />
-            <div className="pool-widget-text">
-              <div className="pool-line">{poolStats.paidPlayers}</div>
-              <div className="pool-line">{poolStats.totalMon}</div>
-            </div>
+          <div className="mon-pool-counter" title="Total MON prize pool">
+            {totalMonPool} MON
           </div>
           {addressStored && (
             <div className="player-tag">
