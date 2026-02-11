@@ -1511,3 +1511,233 @@ body {
   font-size: 13px;
   text-align: center;
 }
+
+/* ── Mobile/Tablet responsiveness ── */
+@media (max-width: 768px) {
+  .top-resource-bar {
+    min-height: 72px;
+    padding: 8px 10px;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .player-tag {
+    order: 1;
+    font-size: 12px;
+  }
+
+  .resource-group {
+    order: 2;
+    gap: 10px;
+    font-size: 14px;
+  }
+
+  .resource-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .streak-icons {
+    order: 3;
+    gap: 4px;
+  }
+
+  .streak-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .resource-actions {
+    order: 4;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    gap: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .resource-actions .ghost-button {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .screen {
+    padding: 96px 10px 12px;
+    justify-content: flex-start;
+    overflow-y: auto;
+  }
+
+  .prematch-panel {
+    margin-top: 6px;
+    max-width: 100%;
+  }
+
+  .panel.prematch-panel {
+    width: 100%;
+    max-width: 100%;
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .prematch-shell {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .prematch-left {
+    width: 100%;
+    gap: 6px;
+  }
+
+  .hero-showcase {
+    width: clamp(110px, 30vw, 150px);
+    height: clamp(110px, 30vw, 150px);
+  }
+
+  .lineup-section {
+    width: 100%;
+  }
+
+  .lineup-slots {
+    justify-content: center;
+  }
+
+  .lineup-slot {
+    width: 56px;
+    height: 56px;
+  }
+
+  .hero-picker.icons .hero-icon,
+  .hero-icon {
+    width: 58px;
+    height: 58px;
+  }
+
+  .prematch-card {
+    width: 100%;
+    min-height: auto;
+    padding: 46px 18px 14px;
+    border-radius: 14px;
+  }
+
+  .match-info-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .match-start-button {
+    max-width: 220px;
+    height: 56px;
+    margin-top: 0;
+  }
+
+  .modal {
+    width: min(96vw, 420px);
+    padding: 16px;
+    gap: 12px;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+
+  .modal.wide {
+    width: min(96vw, 760px);
+  }
+
+  .leaderboard-header,
+  .leaderboard-row {
+    grid-template-columns: 42px 1fr 64px 64px 74px;
+    gap: 6px;
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+
+  .daily-chest-streak {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .base-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .close-img-icon {
+    width: 118px;
+  }
+}
+
+@media (max-width: 480px) {
+  .top-resource-bar {
+    min-height: 86px;
+    padding: 6px 8px;
+  }
+
+  .player-tag {
+    padding: 2px 8px;
+    font-size: 11px;
+  }
+
+  .resource-group {
+    gap: 8px;
+  }
+
+  .resource-item {
+    gap: 4px;
+    font-size: 13px;
+  }
+
+  .resource-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .screen {
+    padding-top: 104px;
+  }
+
+  .lineup-slot {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+  }
+
+  .hero-picker.icons .hero-icon,
+  .hero-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+  }
+
+  .prematch-card {
+    padding: 40px 12px 12px;
+  }
+
+  .match-start-button {
+    max-width: 196px;
+    height: 50px;
+  }
+
+  .chest-icon.reward {
+    width: 150px;
+    height: 150px;
+  }
+
+  .collect-icon {
+    width: 80px;
+  }
+
+  .leaderboard-header,
+  .leaderboard-row {
+    grid-template-columns: 34px 1fr 56px 56px 64px;
+    font-size: 11px;
+  }
+
+  .daily-chest-streak {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .close-img-icon {
+    width: 104px;
+  }
+}
