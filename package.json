@@ -1,0 +1,16 @@
+{
+  "name": "sea-battle-mvp",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "api"
+  ],
+  "scripts": {
+    "dev": "concurrently -n FRONTEND,API -c cyan,magenta \"npm run dev -w frontend\" \"npm run dev -w api\"",
+    "build": "npm run build -w frontend && npm run build -w api",
+    "lint": "npm run lint -w frontend && npm run lint -w api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

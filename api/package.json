@@ -1,0 +1,20 @@
+{
+  "name": "sea-battle-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev src/worker.ts --local",
+    "deploy": "wrangler deploy",
+    "build": "wrangler deploy --dry-run",
+    "lint": "echo \"No lint configured\""
+  },
+  "dependencies": {
+    "itty-router": "^4.2.2",
+    "nanoid": "^5.0.7",
+    "viem": "^2.9.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241230.0"
+  }
+}

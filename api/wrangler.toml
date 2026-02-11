@@ -1,0 +1,11 @@
+name = "sea-battle-api"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+API_ENV = "local"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sea-battle"
+database_id = "00000000-0000-0000-0000-000000000000"
