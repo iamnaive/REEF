@@ -1,4 +1,5 @@
-import { EthereumProvider } from "@walletconnect/ethereum-provider";
+import { createAppKit } from "@reown/appkit";
+import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 
 type RequestArgs = { method: string; params?: unknown[] };
 
@@ -6,50 +7,87 @@ export type Eip1193Provider = {
   request: (args: RequestArgs) => Promise<unknown>;
 };
 
-type WalletConnectLikeProvider = Eip1193Provider & {
-  connect?: () => Promise<unknown>;
-  disconnect?: () => Promise<unknown>;
+type AppKitLike = {
+  open: (options?: unknown) => Promise<unknown>;
+  getWalletProvider: () => unknown;
+  getAccount?: () => { isConnected?: boolean } | undefined;
+  subscribeAccount?: (cb: (state: { isConnected?: boolean }) => void) => () => void;
 };
 
-let wcProvider: Eip1193Provider | null = null;
-let wcInitPromise: Promise<Eip1193Provider> | null = null;
-let wcConnected = false;
+let appKit: AppKitLike | null = null;
 let activeProvider: Eip1193Provider | null = null;
-let injectedProvider: Eip1193Provider | null = null;
-
-type InjectedCandidate = Eip1193Provider & {
-  isMetaMask?: boolean;
-  isRabby?: boolean;
-  isCoinbaseWallet?: boolean;
-  isBraveWallet?: boolean;
-  isTrust?: boolean;
-  isTokenPocket?: boolean;
-  isTronLink?: boolean;
-  providers?: InjectedCandidate[];
-};
-
-function scoreInjectedProvider(p: InjectedCandidate): number {
-  // Filter out non-EVM shims that often break request flow.
-  if (p.isTronLink) return -100;
-  let score = 0;
-  if (p.isMetaMask) score += 10;
-  if (p.isRabby) score += 10;
-  if (p.isCoinbaseWallet) score += 9;
-  if (p.isBraveWallet) score += 8;
-  if (p.isTrust) score += 7;
-  if (p.isTokenPocket) score += 6;
-  return score;
-}
+let wagmiAdapter: WagmiAdapter | null = null;
 
 function getInjectedProvider(): Eip1193Provider | null {
-  const ethereum = (window as Window & { ethereum?: InjectedCandidate }).ethereum;
-  if (!ethereum) return null;
-  const list = Array.isArray(ethereum.providers) && ethereum.providers.length > 0
-    ? ethereum.providers
-    : [ethereum];
-  const sorted = [...list].sort((a, b) => scoreInjectedProvider(b) - scoreInjectedProvider(a));
-  const winner = sorted.find((p) => scoreInjectedProvider(p) >= 0) || null;
-  return winner;
+  const ethereum = (window as Window & { ethereum?: Eip1193Provider }).ethereum;
+  return ethereum || null;
+}
+
+function buildMonadNetwork(options: {
+  chainIdHex: string;
+  chainName: string;
+  rpcUrl?: string;
+}) {
+  const id = Number.parseInt(options.chainIdHex.replace(/^0x/i, ""), 16);
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("Invalid MONAD chain id.");
+  }
+  const rpc = options.rpcUrl || "https://rpc.monad.xyz";
+  return {
+    id,
+    chainNamespace: "eip155" as const,
+    caipNetworkId: `eip155:${id}`,
+    name: options.chainName || "Monad Mainnet",
+    nativeCurrency: {
+      name: "Monad",
+      symbol: "MON",
+      decimals: 18
+    },
+    rpcUrls: {
+      default: { http: [rpc] },
+      public: { http: [rpc] }
+    },
+    blockExplorers: {
+      default: { name: "Monad Explorer", url: "https://explorer.monad.xyz" }
+    }
+  };
+}
+
+async function waitForAppKitConnection(instance: AppKitLike, timeoutMs = 120000) {
+  const current = instance.getAccount?.();
+  if (current?.isConnected) return;
+
+  await instance.open();
+
+  await new Promise<void>((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      off?.();
+      reject(new Error("Wallet connection timeout."));
+    }, timeoutMs);
+
+    const off = instance.subscribeAccount?.((state) => {
+      if (!state?.isConnected || done) return;
+      done = true;
+      clearTimeout(timer);
+      off?.();
+      resolve();
+    });
+
+    // Fallback for adapters that don't expose subscribeAccount.
+    if (!off) {
+      const poll = setInterval(() => {
+        const next = instance.getAccount?.();
+        if (!next?.isConnected || done) return;
+        done = true;
+        clearTimeout(timer);
+        clearInterval(poll);
+        resolve();
+      }, 300);
+    }
+  });
 }
 
 export async function getWalletProvider(options: {
@@ -60,60 +98,50 @@ export async function getWalletProvider(options: {
 }): Promise<Eip1193Provider> {
   if (activeProvider) return activeProvider;
 
-  // If Reown is configured, always prefer opening Reown UI first.
   if (!options.reownProjectId) {
-    injectedProvider = injectedProvider || getInjectedProvider();
-    if (injectedProvider) {
-      activeProvider = injectedProvider;
-      return activeProvider;
+    const injected = getInjectedProvider();
+    if (injected) {
+      activeProvider = injected;
+      return injected;
     }
-    throw new Error("Set VITE_REOWN_PROJECT_ID or install an injected EVM wallet.");
+    throw new Error("Set VITE_REOWN_PROJECT_ID to use Reown AppKit.");
   }
 
-  if (wcProvider) return wcProvider;
-
-  if (!wcInitPromise) {
-    const chainId = Number.parseInt(options.chainIdHex.replace(/^0x/i, ""), 16);
-    if (!Number.isFinite(chainId) || chainId <= 0) {
-      throw new Error("Invalid MONAD chain id.");
-    }
-    wcInitPromise = EthereumProvider.init({
+  if (!appKit) {
+    const monadNetwork = buildMonadNetwork(options);
+    wagmiAdapter = new WagmiAdapter({
       projectId: options.reownProjectId,
-      chains: [chainId],
-      optionalChains: [chainId],
-      showQrModal: true,
-      rpcMap: options.rpcUrl ? { [chainId]: options.rpcUrl } : undefined,
+      networks: [monadNetwork]
+    });
+    appKit = createAppKit({
+      projectId: options.reownProjectId,
+      adapters: wagmiAdapter ? [wagmiAdapter] : [],
+      networks: [monadNetwork],
+      defaultNetwork: monadNetwork,
+      defaultAccountTypes: {
+        eip155: "eoa"
+      },
       metadata: {
         name: "Sea Battle",
         description: "Sea Battle Wallet Login",
         url: window.location.origin,
         icons: [`${window.location.origin}/favicon.ico`]
       }
-    }) as unknown as Promise<Eip1193Provider>;
+    }) as unknown as AppKitLike;
   }
 
-  try {
-    const rawProvider = (await wcInitPromise) as WalletConnectLikeProvider;
-    const wrappedProvider: Eip1193Provider = {
-      request: async (args: RequestArgs) => {
-        // WalletConnect provider requires explicit connect() before request().
-        if (!wcConnected && typeof rawProvider.connect === "function") {
-          await rawProvider.connect();
-          wcConnected = true;
-        }
-        return rawProvider.request(args);
+  const wrappedProvider: Eip1193Provider = {
+    request: async (args: RequestArgs) => {
+      if (!appKit) throw new Error("Reown AppKit is not initialized.");
+      await waitForAppKitConnection(appKit);
+      const walletProvider = appKit.getWalletProvider() as Eip1193Provider | undefined;
+      if (!walletProvider?.request) {
+        throw new Error("Connected wallet provider is unavailable.");
       }
-    };
-    wcProvider = wrappedProvider;
-    activeProvider = wrappedProvider;
-    return wrappedProvider;
-  } catch {
-    // If Reown is configured, do not silently fallback to injected providers.
-    // This guarantees the Reown UI flow (installed wallets list + connectors).
-    wcInitPromise = null;
-    wcProvider = null;
-    wcConnected = false;
-    activeProvider = null;
-    throw new Error("Failed to initialize Reown provider. Check VITE_REOWN_PROJECT_ID and Reown allowed domains.");
-  }
+      return walletProvider.request(args);
+    }
+  };
+
+  activeProvider = wrappedProvider;
+  return wrappedProvider;
 }
