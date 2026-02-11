@@ -956,7 +956,8 @@ export default function App() {
             <div className="bg-load-stripe" style={{ width: `${Math.round(bgLoadProgress * 100)}%` }} />
           )}
           <div className="mon-pool-counter" title="Total MON prize pool">
-            {totalMonPool} MON
+            <span className="mon-pool-label">PRIZE POOL</span>
+            <span className="mon-pool-value">{totalMonPool} MON</span>
           </div>
           {addressStored && (
             <div className="player-tag">

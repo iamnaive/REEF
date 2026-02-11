@@ -183,21 +183,34 @@ body {
 
 .mon-pool-counter {
   min-width: 120px;
-  padding: 6px 10px;
+  padding: 5px 10px 6px;
   flex: 0 0 auto;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   border-radius: 12px;
   border: 1px solid rgba(76, 201, 240, 0.35);
   background: rgba(9, 46, 58, 0.72);
   color: #f4fbff;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
   text-align: center;
   white-space: nowrap;
+}
+
+.mon-pool-label {
+  font-size: 9px;
+  letter-spacing: 0.9px;
+  opacity: 0.85;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mon-pool-value {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .resource-group {
@@ -1094,6 +1107,7 @@ body {
 .chest-icon.opened {
   animation: none;
   opacity: 0.6;
+  pointer-events: none;
 }
 
 /* ── Reward flyout from chest ── */
@@ -1173,7 +1187,14 @@ body {
   background: transparent;
   padding: 0;
   cursor: pointer;
-  margin-top: -50px;
+  margin-top: -42px;
+  min-width: 132px;
+  min-height: 60px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 12;
   transition: transform 0.2s ease, filter 0.2s ease;
 }
 
@@ -1186,6 +1207,7 @@ body {
   width: 90px;
   height: auto;
   object-fit: contain;
+  pointer-events: none;
 }
 
 .rewards {
@@ -1590,7 +1612,15 @@ body {
     order: 0;
     min-width: 104px;
     padding: 5px 8px;
+    gap: 1px;
+  }
+
+  .mon-pool-label {
     font-size: 8px;
+  }
+
+  .mon-pool-value {
+    font-size: 10px;
   }
 
   .resource-group {
@@ -1742,7 +1772,15 @@ body {
   .mon-pool-counter {
     min-width: 92px;
     padding: 4px 6px;
-    font-size: 8px;
+    gap: 1px;
+  }
+
+  .mon-pool-label {
+    font-size: 7px;
+  }
+
+  .mon-pool-value {
+    font-size: 9px;
   }
 
   .player-tag {
