@@ -5,6 +5,7 @@ compatibility_date = "2025-01-01"
 [vars]
 API_ENV = "local"
 MONAD_RPC_URL = "https://rpc.monad.xyz"
+ENTRY_RECEIVER = "0x782EB8568EEa9fC800B625E37A7cE486e92431E1"
 
 [[d1_databases]]
 binding = "DB"

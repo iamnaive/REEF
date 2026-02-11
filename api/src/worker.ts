@@ -32,6 +32,7 @@ type Env = {
   DB: D1Database;
   API_ENV: string;
   MONAD_RPC_URL?: string;
+  ENTRY_RECEIVER?: string;
 };
 
 const router = Router();
@@ -367,7 +368,7 @@ router.post("/api/entry/verify", async (request: Request, env: Env) => {
 
   await ensureEntryPaymentsTable(env);
 
-  const entryTo = "0x682D0091Df3FEd5Fb7DFFd6B5B4aDcD794f34043".toLowerCase();
+  const entryTo = (env.ENTRY_RECEIVER || "0x782EB8568EEa9fC800B625E37A7cE486e92431E1").toLowerCase();
   const txHash = parsed.data.txHash as `0x${string}`;
   const requiredWei = BigInt(parsed.data.amountWei);
   const claimedAddress = auth.address.toLowerCase();
