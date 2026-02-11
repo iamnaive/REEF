@@ -14,10 +14,42 @@ type WalletConnectLikeProvider = Eip1193Provider & {
 let wcProvider: Eip1193Provider | null = null;
 let wcInitPromise: Promise<Eip1193Provider> | null = null;
 let wcConnected = false;
+let activeProvider: Eip1193Provider | null = null;
+let injectedProvider: Eip1193Provider | null = null;
+
+type InjectedCandidate = Eip1193Provider & {
+  isMetaMask?: boolean;
+  isRabby?: boolean;
+  isCoinbaseWallet?: boolean;
+  isBraveWallet?: boolean;
+  isTrust?: boolean;
+  isTokenPocket?: boolean;
+  isTronLink?: boolean;
+  providers?: InjectedCandidate[];
+};
+
+function scoreInjectedProvider(p: InjectedCandidate): number {
+  // Filter out non-EVM shims that often break request flow.
+  if (p.isTronLink) return -100;
+  let score = 0;
+  if (p.isMetaMask) score += 10;
+  if (p.isRabby) score += 10;
+  if (p.isCoinbaseWallet) score += 9;
+  if (p.isBraveWallet) score += 8;
+  if (p.isTrust) score += 7;
+  if (p.isTokenPocket) score += 6;
+  return score;
+}
 
 function getInjectedProvider(): Eip1193Provider | null {
-  const ethereum = (window as Window & { ethereum?: Eip1193Provider }).ethereum;
-  return ethereum || null;
+  const ethereum = (window as Window & { ethereum?: InjectedCandidate }).ethereum;
+  if (!ethereum) return null;
+  const list = Array.isArray(ethereum.providers) && ethereum.providers.length > 0
+    ? ethereum.providers
+    : [ethereum];
+  const sorted = [...list].sort((a, b) => scoreInjectedProvider(b) - scoreInjectedProvider(a));
+  const winner = sorted.find((p) => scoreInjectedProvider(p) >= 0) || null;
+  return winner;
 }
 
 export async function getWalletProvider(options: {
@@ -26,13 +58,16 @@ export async function getWalletProvider(options: {
   chainName: string;
   rpcUrl?: string;
 }): Promise<Eip1193Provider> {
-  // Prefer Reown (WalletConnect) when projectId is provided to avoid
-  // extension-specific injected provider issues (e.g., TronLink/EVM shims).
-  const preferReown = Boolean(options.reownProjectId);
+  if (activeProvider) return activeProvider;
 
-  if (!preferReown) {
-    const injected = getInjectedProvider();
-    if (injected) return injected;
+  injectedProvider = injectedProvider || getInjectedProvider();
+  // Prefer installed browser EVM wallets first for instant connection UX.
+  if (injectedProvider) {
+    activeProvider = injectedProvider;
+    return activeProvider;
+  }
+
+  if (!options.reownProjectId) {
     throw new Error("Set VITE_REOWN_PROJECT_ID or install an injected EVM wallet.");
   }
 
@@ -71,13 +106,14 @@ export async function getWalletProvider(options: {
       }
     };
     wcProvider = wrappedProvider;
+    activeProvider = wrappedProvider;
     return wrappedProvider;
   } catch {
     // Fallback to injected provider only if WC init failed.
     wcInitPromise = null;
     wcProvider = null;
     wcConnected = false;
-    const injected = getInjectedProvider();
+    const injected = injectedProvider || getInjectedProvider();
     if (injected) return injected;
     throw new Error("Failed to initialize Reown provider.");
   }
