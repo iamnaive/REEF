@@ -25,7 +25,7 @@ function getHeaders(token?: string, idempotencyKey?: string) {
 }
 
 export async function fetchNonce(address: string) {
-  const res = await fetch(`${API_BASE}/api/nonce?address=${address}`);
+  const res = await fetch(`${API_BASE}/api/nonce?address=${encodeURIComponent(address)}`);
   if (!res.ok) throw new Error("Failed to get nonce");
   return (await res.json()) as { nonce: string; message: string };
 }

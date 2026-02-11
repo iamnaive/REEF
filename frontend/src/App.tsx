@@ -471,7 +471,7 @@ export default function App() {
 
       await ensureMonadNetwork();
       const accounts = (await walletRequest("eth_requestAccounts")) as string[];
-      const address = accounts?.[0];
+      const address = normalizeWalletAddress(accounts?.[0]);
       if (!address) throw new Error("Wallet is not connected.");
 
       const { message } = await fetchNonce(address);
@@ -1610,4 +1610,13 @@ function monToWei(amountMon: string): bigint {
   const frac = (fracRaw + "0".repeat(18)).slice(0, 18);
   const wei = BigInt(whole) * 10n ** 18n + BigInt(frac);
   return wei;
+}
+
+function normalizeWalletAddress(raw?: string): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  // WalletConnect may return CAIP-10, e.g. "eip155:1:0xabc..."
+  const parts = trimmed.split(":");
+  const candidate = parts[parts.length - 1] || trimmed;
+  return candidate.trim();
 }
