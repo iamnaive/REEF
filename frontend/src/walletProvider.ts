@@ -20,13 +20,17 @@ export async function getWalletProvider(options: {
   chainName: string;
   rpcUrl?: string;
 }): Promise<Eip1193Provider> {
-  const injected = getInjectedProvider();
-  if (injected) return injected;
+  // Prefer Reown (WalletConnect) when projectId is provided to avoid
+  // extension-specific injected provider issues (e.g., TronLink/EVM shims).
+  const preferReown = Boolean(options.reownProjectId);
+
+  if (!preferReown) {
+    const injected = getInjectedProvider();
+    if (injected) return injected;
+    throw new Error("Set VITE_REOWN_PROJECT_ID or install an injected EVM wallet.");
+  }
 
   if (wcProvider) return wcProvider;
-  if (!options.reownProjectId) {
-    throw new Error("Set VITE_REOWN_PROJECT_ID for Reown wallet connection.");
-  }
 
   if (!wcInitPromise) {
     const chainId = Number.parseInt(options.chainIdHex.replace(/^0x/i, ""), 16);
@@ -48,6 +52,14 @@ export async function getWalletProvider(options: {
     }) as unknown as Promise<Eip1193Provider>;
   }
 
-  wcProvider = await wcInitPromise;
-  return wcProvider;
+  try {
+    wcProvider = await wcInitPromise;
+    return wcProvider;
+  } catch {
+    // Fallback to injected provider only if WC init failed.
+    wcInitPromise = null;
+    const injected = getInjectedProvider();
+    if (injected) return injected;
+    throw new Error("Failed to initialize Reown provider.");
+  }
 }
