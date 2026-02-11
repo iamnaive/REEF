@@ -968,8 +968,8 @@ export default function App() {
           <div className="pool-widget" title="Prize pool from verified MON entry payments">
             <img src="/assets/ui/pool.avif" alt="Pool" className="pool-widget-bg" />
             <div className="pool-widget-text">
-              <div className="pool-line">Players: {poolStats.paidPlayers}</div>
-              <div className="pool-line">Pool: {poolStats.totalMon} MON</div>
+              <div className="pool-line">{poolStats.paidPlayers}</div>
+              <div className="pool-line">{poolStats.totalMon}</div>
             </div>
           </div>
           {addressStored && (
