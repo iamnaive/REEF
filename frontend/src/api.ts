@@ -66,6 +66,16 @@ export async function verifyEntryPayment(token: string, txHash: string, amountWe
   return (await res.json()) as { ok: true; txHash: string; amountWei: string };
 }
 
+export async function fetchPoolStats() {
+  const res = await fetch(`${API_BASE}/api/pool`);
+  if (!res.ok) throw new Error("Failed to load pool stats");
+  return (await res.json()) as {
+    paidPlayers: number;
+    totalWei: string;
+    totalMon: string;
+  };
+}
+
 export async function getState(token: string) {
   const res = await fetch(`${API_BASE}/api/state`, {
     headers: getHeaders(token)

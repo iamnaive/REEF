@@ -181,6 +181,41 @@ body {
   letter-spacing: 0.5px;
 }
 
+.pool-widget {
+  position: relative;
+  width: 190px;
+  height: 58px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+}
+
+.pool-widget-bg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pool-widget-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8px 10px 8px 14px;
+  gap: 2px;
+  color: #f4fbff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.pool-line {
+  white-space: nowrap;
+}
+
 .resource-group {
   display: flex;
   gap: 18px;
@@ -1567,6 +1602,17 @@ body {
     font-size: 12px;
   }
 
+  .pool-widget {
+    order: 0;
+    width: 166px;
+    height: 52px;
+  }
+
+  .pool-widget-text {
+    font-size: 11px;
+    padding: 7px 10px 7px 12px;
+  }
+
   .resource-group {
     order: 2;
     gap: 10px;
@@ -1711,6 +1757,16 @@ body {
   .top-resource-bar {
     min-height: 86px;
     padding: 6px 8px;
+  }
+
+  .pool-widget {
+    width: 150px;
+    height: 46px;
+  }
+
+  .pool-widget-text {
+    font-size: 10px;
+    padding: 6px 8px 6px 10px;
   }
 
   .player-tag {

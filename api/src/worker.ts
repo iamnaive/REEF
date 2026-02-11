@@ -348,6 +348,11 @@ router.get("/api/entry/status", async (request: Request, env: Env) => {
   });
 });
 
+router.get("/api/pool", async (_request: Request, env: Env) => {
+  const stats = await getPoolStats(env);
+  return json(stats);
+});
+
 router.post("/api/entry/verify", async (request: Request, env: Env) => {
   const auth = await requireAuth(request, env);
   if (!auth) return json({ error: "Unauthorized" }, 401);
@@ -1792,6 +1797,43 @@ async function getLatestVerifiedEntryPayment(env: Env, address: string): Promise
 async function hasVerifiedEntryPayment(env: Env, address: string): Promise<boolean> {
   const latest = await getLatestVerifiedEntryPayment(env, address);
   return Boolean(latest);
+}
+
+async function getPoolStats(env: Env): Promise<{
+  paidPlayers: number;
+  totalWei: string;
+  totalMon: string;
+}> {
+  await ensureEntryPaymentsTable(env);
+  const rows = await env.DB.prepare(
+    "SELECT address, amount_wei FROM entry_payments"
+  ).all<{ address: string; amount_wei: string }>();
+
+  const uniquePlayers = new Set<string>();
+  let totalWei = 0n;
+
+  for (const row of rows.results) {
+    uniquePlayers.add((row.address || "").toLowerCase());
+    try {
+      totalWei += BigInt(row.amount_wei || "0");
+    } catch {
+      // Ignore malformed records without failing pool stats.
+    }
+  }
+
+  return {
+    paidPlayers: uniquePlayers.size,
+    totalWei: totalWei.toString(),
+    totalMon: formatWeiToMon(totalWei)
+  };
+}
+
+function formatWeiToMon(wei: bigint): string {
+  const whole = wei / 10n ** 18n;
+  const fraction = wei % 10n ** 18n;
+  const fractionPadded = fraction.toString().padStart(18, "0");
+  const fractionShort = fractionPadded.slice(0, 4).replace(/0+$/, "");
+  return fractionShort ? `${whole.toString()}.${fractionShort}` : whole.toString();
 }
 
 async function logEvent(

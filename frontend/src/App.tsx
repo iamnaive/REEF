@@ -39,6 +39,7 @@ import {
   collectBaseResources,
   claimDailyChest,
   fetchEntryStatus,
+  fetchPoolStats,
   verifyEntryPayment
 } from "./api";
 import { useResources } from "./resources";
@@ -157,6 +158,10 @@ export default function App() {
   const [leaderboardMyEntry, setLeaderboardMyEntry] = useState<LeaderboardEntry | null>(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const [poolStats, setPoolStats] = useState<{ paidPlayers: number; totalMon: string }>({
+    paidPlayers: 0,
+    totalMon: "0"
+  });
 
   useEffect(() => {
     if (!gameRef.current) {
@@ -835,6 +840,28 @@ export default function App() {
   }, [resetAt]);
 
   useEffect(() => {
+    let cancelled = false;
+    const loadPool = async () => {
+      try {
+        const res = await fetchPoolStats();
+        if (!cancelled) {
+          setPoolStats({ paidPlayers: res.paidPlayers, totalMon: res.totalMon });
+        }
+      } catch {
+        // Keep last known stats if request fails.
+      }
+    };
+    void loadPool();
+    const timer = window.setInterval(() => {
+      void loadPool();
+    }, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
     const updateOrientation = () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -938,6 +965,13 @@ export default function App() {
           {!assetsReady && (
             <div className="bg-load-stripe" style={{ width: `${Math.round(bgLoadProgress * 100)}%` }} />
           )}
+          <div className="pool-widget" title="Prize pool from verified MON entry payments">
+            <img src="/assets/ui/pool.avif" alt="Pool" className="pool-widget-bg" />
+            <div className="pool-widget-text">
+              <div className="pool-line">Players: {poolStats.paidPlayers}</div>
+              <div className="pool-line">Pool: {poolStats.totalMon} MON</div>
+            </div>
+          </div>
           {addressStored && (
             <div className="player-tag">
               <span className="player-tag-icon">🐟</span>
