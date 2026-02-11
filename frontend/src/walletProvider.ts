@@ -6,8 +6,14 @@ export type Eip1193Provider = {
   request: (args: RequestArgs) => Promise<unknown>;
 };
 
+type WalletConnectLikeProvider = Eip1193Provider & {
+  connect?: () => Promise<unknown>;
+  disconnect?: () => Promise<unknown>;
+};
+
 let wcProvider: Eip1193Provider | null = null;
 let wcInitPromise: Promise<Eip1193Provider> | null = null;
+let wcConnected = false;
 
 function getInjectedProvider(): Eip1193Provider | null {
   const ethereum = (window as Window & { ethereum?: Eip1193Provider }).ethereum;
@@ -53,11 +59,24 @@ export async function getWalletProvider(options: {
   }
 
   try {
-    wcProvider = await wcInitPromise;
-    return wcProvider;
+    const rawProvider = (await wcInitPromise) as WalletConnectLikeProvider;
+    const wrappedProvider: Eip1193Provider = {
+      request: async (args: RequestArgs) => {
+        // WalletConnect provider requires explicit connect() before request().
+        if (!wcConnected && typeof rawProvider.connect === "function") {
+          await rawProvider.connect();
+          wcConnected = true;
+        }
+        return rawProvider.request(args);
+      }
+    };
+    wcProvider = wrappedProvider;
+    return wrappedProvider;
   } catch {
     // Fallback to injected provider only if WC init failed.
     wcInitPromise = null;
+    wcProvider = null;
+    wcConnected = false;
     const injected = getInjectedProvider();
     if (injected) return injected;
     throw new Error("Failed to initialize Reown provider.");
