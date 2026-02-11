@@ -4,6 +4,7 @@ compatibility_date = "2025-01-01"
 
 [vars]
 API_ENV = "local"
+MONAD_RPC_URL = ""
 
 [[d1_databases]]
 binding = "DB"
