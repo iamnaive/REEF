@@ -486,7 +486,14 @@ export default function App() {
       setToken(authRes.token);
       setAddressStored(authRes.address);
 
-      const entryStatus = await fetchEntryStatus(authRes.token);
+      let entryStatus: { paid: boolean; txHash: string | null } = { paid: false, txHash: null };
+      try {
+        const status = await fetchEntryStatus(authRes.token);
+        entryStatus = { paid: status.paid, txHash: status.txHash };
+      } catch {
+        // Backward-compatible fallback: if the API does not expose /api/entry/status yet,
+        // continue with the regular payment flow instead of blocking login.
+      }
       if (!entryStatus.paid) {
         const txHash = (await walletRequest("eth_sendTransaction", [{
           from: address,
