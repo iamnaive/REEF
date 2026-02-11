@@ -33,6 +33,7 @@ type Env = {
   API_ENV: string;
   MONAD_RPC_URL?: string;
   ENTRY_RECEIVER?: string;
+  ENTRY_FEE_WEI?: string;
 };
 
 const router = Router();
@@ -43,6 +44,7 @@ const CORS_HEADERS = {
 };
 
 const RATE_LIMIT_PER_MIN = 60;
+const NONCE_TTL_MS = 5 * 60 * 1000;
 const MATCH_BANK_DAY_CAP = 3;
 const MATCH_BANK_MAX = MATCH_LIMIT_PER_DAY * MATCH_BANK_DAY_CAP;
 router.options("*", () => new Response(null, { headers: CORS_HEADERS }));
@@ -127,15 +129,15 @@ router.get("/api/shop", async (_request: Request) => {
 });
 
 router.get("/api/inventory", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
   const inventory = await getInventoryState(env, auth.address);
   return json(inventory);
 });
 
 router.post("/api/shop/buy", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
 
   const idempotencyKey = request.headers.get("Idempotency-Key");
   if (!idempotencyKey) return json({ error: "Idempotency key required" }, 400);
@@ -197,8 +199,8 @@ router.post("/api/shop/buy", async (request: Request, env: Env) => {
 });
 
 router.post("/api/inventory/equip", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
   const body = await readBody(request);
   const schema = z.object({ artifactId: z.string() });
   const parsed = schema.safeParse(body);
@@ -256,7 +258,9 @@ router.post("/api/guest", async (request: Request, env: Env) => {
 router.post("/api/dev/reset-daily", async (request: Request, env: Env) => {
   const auth = await requireAuth(request, env);
   if (!auth) return json({ error: "Unauthorized" }, 401);
-  if (env.API_ENV !== "local") return json({ error: "Not allowed" }, 403);
+  const host = new URL(request.url).hostname;
+  const isLocalHost = host === "localhost" || host === "127.0.0.1";
+  if (env.API_ENV !== "local" || !isLocalHost) return json({ error: "Not allowed" }, 403);
 
   await ensureMatchBankTable(env);
   await env.DB.prepare(
@@ -302,11 +306,16 @@ router.post("/api/login", async (request: Request, env: Env) => {
   if (!isAddress(address)) return json({ error: "Invalid address" }, 400);
 
   const nonceRow = await env.DB.prepare(
-    "SELECT nonce FROM nonces WHERE address = ?"
+    "SELECT nonce, created_at FROM nonces WHERE address = ?"
   )
     .bind(address)
-    .first<{ nonce: string }>();
+    .first<{ nonce: string; created_at: string }>();
   if (!nonceRow?.nonce) return json({ error: "Nonce not found" }, 400);
+  const nonceAgeMs = Date.now() - new Date(nonceRow.created_at).getTime();
+  if (!Number.isFinite(nonceAgeMs) || nonceAgeMs > NONCE_TTL_MS) {
+    await env.DB.prepare("DELETE FROM nonces WHERE address = ?").bind(address).run();
+    return json({ error: "Nonce expired" }, 400);
+  }
 
   const message = `Login to Sea Battle MVP. Nonce: ${nonceRow.nonce}`;
   const valid = await verifyMessage({ address, message, signature });
@@ -360,7 +369,7 @@ router.post("/api/entry/verify", async (request: Request, env: Env) => {
   const body = await readBody(request);
   const schema = z.object({
     txHash: z.string().startsWith("0x"),
-    amountWei: z.string().regex(/^[0-9]+$/)
+    amountWei: z.string().regex(/^[0-9]+$/).optional()
   });
   const parsed = schema.safeParse(body);
   if (!parsed.success) return json({ error: "Invalid payload" }, 400);
@@ -370,7 +379,12 @@ router.post("/api/entry/verify", async (request: Request, env: Env) => {
 
   const entryTo = (env.ENTRY_RECEIVER || "0x782EB8568EEa9fC800B625E37A7cE486e92431E1").toLowerCase();
   const txHash = parsed.data.txHash as `0x${string}`;
-  const requiredWei = BigInt(parsed.data.amountWei);
+  let requiredWei: bigint;
+  try {
+    requiredWei = parseRequiredEntryFeeWei(env);
+  } catch (err) {
+    return json({ error: (err as Error).message || "ENTRY_FEE_WEI is not configured" }, 500);
+  }
   const claimedAddress = auth.address.toLowerCase();
 
   const existing = await env.DB.prepare(
@@ -416,8 +430,8 @@ router.post("/api/entry/verify", async (request: Request, env: Env) => {
 });
 
 router.get("/api/state", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
 
   const { address } = auth;
   const user = await env.DB.prepare(
@@ -447,8 +461,8 @@ router.get("/api/state", async (request: Request, env: Env) => {
 });
 
 router.post("/api/onboarding/claim", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
 
   const { address } = auth;
   const existing = await env.DB.prepare(
@@ -501,8 +515,8 @@ router.post("/api/onboarding/claim", async (request: Request, env: Env) => {
 });
 
 router.post("/api/match/prepare", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
   const rate = await enforceRateLimit(request, env);
   if (rate) return rate;
 
@@ -615,8 +629,8 @@ router.post("/api/match/prepare", async (request: Request, env: Env) => {
 });
 
 router.post("/api/match/resolve", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
   const rate = await enforceRateLimit(request, env);
   if (rate) return rate;
 
@@ -760,8 +774,8 @@ router.post("/api/match/resolve", async (request: Request, env: Env) => {
 });
 
 router.post("/api/chest/open", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
   const rate = await enforceRateLimit(request, env);
   if (rate) return rate;
 
@@ -804,15 +818,15 @@ router.post("/api/chest/open", async (request: Request, env: Env) => {
 /* ── Daily Free Chest ── */
 
 router.get("/api/daily-chest", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
   const state = await getDailyChestState(env, auth.address);
   return json(state);
 });
 
 router.post("/api/daily-chest/claim", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
 
   await ensureDailyChestTable(env);
   await ensureLeaderboardTable(env);
@@ -869,15 +883,15 @@ router.post("/api/daily-chest/claim", async (request: Request, env: Env) => {
 /* ── Base Building System ── */
 
 router.get("/api/base", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
   const base = await getBaseState(env, auth.address);
   return json(base);
 });
 
 router.post("/api/base/build", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
 
   const body = await readBody(request);
   const schema = z.object({
@@ -959,8 +973,8 @@ router.post("/api/base/build", async (request: Request, env: Env) => {
 });
 
 router.post("/api/base/collect", async (request: Request, env: Env) => {
-  const auth = await requireAuth(request, env);
-  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const auth = await requirePaidAuth(request, env);
+  if (!auth) return json({ error: "Payment required" }, 402);
 
   await ensureBaseTable(env);
   await ensureLeaderboardTable(env);
@@ -1038,7 +1052,7 @@ router.all("*", () => json({ error: "Not found" }, 404));
 
 export default {
   fetch: async (request: Request, env: Env, ctx: ExecutionContext) => {
-    ctx.waitUntil(cleanupSessions(env));
+    ctx.waitUntil(Promise.all([cleanupSessions(env), cleanupRateLimits(env)]));
     try {
       return await router.handle(request, env);
     } catch (err) {
@@ -1078,6 +1092,26 @@ async function requireAuth(request: Request, env: Env) {
   if (!session) return null;
   if (new Date(session.expires_at).getTime() < Date.now()) return null;
   return { address: session.address };
+}
+
+async function requirePaidAuth(request: Request, env: Env) {
+  const auth = await requireAuth(request, env);
+  if (!auth) return null;
+  const paid = await hasVerifiedEntryPayment(env, auth.address);
+  if (!paid) return null;
+  return auth;
+}
+
+function parseRequiredEntryFeeWei(env: Env): bigint {
+  const raw = `${env.ENTRY_FEE_WEI || ""}`.trim();
+  if (!/^[0-9]+$/.test(raw)) {
+    throw new Error("ENTRY_FEE_WEI is not configured");
+  }
+  const value = BigInt(raw);
+  if (value <= 0n) {
+    throw new Error("ENTRY_FEE_WEI must be greater than 0");
+  }
+  return value;
 }
 
 async function getDailyLimit(env: Env, address: string) {
@@ -1449,6 +1483,12 @@ async function saveIdempotent(
 async function cleanupSessions(env: Env) {
   const now = new Date().toISOString();
   await env.DB.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(now).run();
+}
+
+async function cleanupRateLimits(env: Env) {
+  await env.DB.prepare("DELETE FROM rate_limits WHERE reset_at < ?")
+    .bind(Date.now())
+    .run();
 }
 
 let coreTablesReady = false;
