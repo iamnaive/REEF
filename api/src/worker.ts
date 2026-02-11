@@ -228,6 +228,7 @@ router.post("/api/inventory/equip", async (request: Request, env: Env) => {
 
 
 router.post("/api/guest", async (request: Request, env: Env) => {
+  await ensureCoreTables(env);
   if (env.API_ENV !== "local") return json({ error: "Not allowed" }, 403);
   const token = nanoid(32);
   const address = `guest_${nanoid(10)}`;
@@ -270,6 +271,7 @@ router.post("/api/dev/reset-daily", async (request: Request, env: Env) => {
 });
 
 router.get("/api/nonce", async (request: Request, env: Env) => {
+  await ensureCoreTables(env);
   const url = new URL(request.url);
   const address = url.searchParams.get("address") || "";
   if (!isAddress(address)) return json({ error: "Invalid address" }, 400);
@@ -285,6 +287,7 @@ router.get("/api/nonce", async (request: Request, env: Env) => {
 });
 
 router.post("/api/login", async (request: Request, env: Env) => {
+  await ensureCoreTables(env);
   const rate = await enforceRateLimit(request, env);
   if (rate) return rate;
   const body = await readBody(request);
@@ -1014,9 +1017,17 @@ router.post("/api/base/collect", async (request: Request, env: Env) => {
 router.all("*", () => json({ error: "Not found" }, 404));
 
 export default {
-  fetch: (request: Request, env: Env, ctx: ExecutionContext) => {
+  fetch: async (request: Request, env: Env, ctx: ExecutionContext) => {
     ctx.waitUntil(cleanupSessions(env));
-    return router.handle(request, env);
+    try {
+      return await router.handle(request, env);
+    } catch (err) {
+      const details = err instanceof Error ? err.message : "unknown";
+      if (env.API_ENV === "local") {
+        return json({ error: "Internal server error", details }, 500);
+      }
+      return json({ error: "Internal server error" }, 500);
+    }
   }
 };
 
@@ -1418,6 +1429,44 @@ async function saveIdempotent(
 async function cleanupSessions(env: Env) {
   const now = new Date().toISOString();
   await env.DB.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(now).run();
+}
+
+let coreTablesReady = false;
+async function ensureCoreTables(env: Env) {
+  if (coreTablesReady) return;
+  await env.DB.batch([
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS users (address TEXT PRIMARY KEY, created_at TEXT NOT NULL, has_onboarded INTEGER NOT NULL DEFAULT 0, heroes_json TEXT NOT NULL DEFAULT '[]', upgrades_json TEXT NOT NULL DEFAULT '{\"piercingLevel\":0}', last_active TEXT)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, address TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS nonces (address TEXT PRIMARY KEY, nonce TEXT NOT NULL, created_at TEXT NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS daily_limits (address TEXT NOT NULL, day_key TEXT NOT NULL, matches_played INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (address, day_key))"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS pending_matches (id TEXT PRIMARY KEY, address TEXT NOT NULL, hero TEXT NOT NULL, opponent_id TEXT NOT NULL, opponent_hero TEXT NOT NULL, opponent_upgrades TEXT NOT NULL, weather_id TEXT NOT NULL, server_seed TEXT NOT NULL, created_at TEXT NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS chests (id TEXT PRIMARY KEY, address TEXT NOT NULL, type TEXT NOT NULL, match_id TEXT, rewards_json TEXT NOT NULL, created_at TEXT NOT NULL, opened_at TEXT)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS idempotency (key TEXT NOT NULL, address TEXT NOT NULL, route TEXT NOT NULL, response_json TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (key, address, route))"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS projections (id TEXT PRIMARY KEY, address TEXT NOT NULL, hero TEXT NOT NULL, lineup_json TEXT NOT NULL DEFAULT '[]', weather_id TEXT NOT NULL DEFAULT '', upgrades_json TEXT NOT NULL, updated_at TEXT NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS logs (id TEXT PRIMARY KEY, address TEXT, event TEXT NOT NULL, payload_json TEXT, created_at TEXT NOT NULL, ip TEXT)"
+    )
+  ]);
+  coreTablesReady = true;
 }
 
 let leaderboardTableReady = false;
