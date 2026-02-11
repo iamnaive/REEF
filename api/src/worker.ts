@@ -331,7 +331,21 @@ router.post("/api/login", async (request: Request, env: Env) => {
 
   await logEvent(env, address, "login", { address }, request);
 
-  return json({ token, address });
+  const entryPaid = await hasVerifiedEntryPayment(env, address);
+  return json({ token, address, entryPaid });
+});
+
+router.get("/api/entry/status", async (request: Request, env: Env) => {
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ error: "Unauthorized" }, 401);
+
+  const payment = await getLatestVerifiedEntryPayment(env, auth.address);
+  return json({
+    paid: Boolean(payment),
+    txHash: payment?.txHash || null,
+    amountWei: payment?.amountWei || null,
+    verifiedAt: payment?.verifiedAt || null
+  });
 });
 
 router.post("/api/entry/verify", async (request: Request, env: Env) => {
@@ -1756,6 +1770,28 @@ async function ensureEntryPaymentsTable(env: Env) {
     "CREATE INDEX IF NOT EXISTS idx_entry_payments_address ON entry_payments (address)"
   ).run();
   entryPaymentsTableReady = true;
+}
+
+async function getLatestVerifiedEntryPayment(env: Env, address: string): Promise<{
+  txHash: string;
+  amountWei: string;
+  verifiedAt: string;
+} | null> {
+  await ensureEntryPaymentsTable(env);
+  const row = await env.DB.prepare(
+    "SELECT tx_hash, amount_wei, verified_at FROM entry_payments WHERE address = ? ORDER BY verified_at DESC LIMIT 1"
+  ).bind(address).first<{ tx_hash: string; amount_wei: string; verified_at: string }>();
+  if (!row) return null;
+  return {
+    txHash: row.tx_hash,
+    amountWei: row.amount_wei,
+    verifiedAt: row.verified_at
+  };
+}
+
+async function hasVerifiedEntryPayment(env: Env, address: string): Promise<boolean> {
+  const latest = await getLatestVerifiedEntryPayment(env, address);
+  return Boolean(latest);
 }
 
 async function logEvent(

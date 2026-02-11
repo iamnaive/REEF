@@ -37,7 +37,20 @@ export async function login(address: string, signature: string) {
     body: JSON.stringify({ address, signature })
   });
   if (!res.ok) throw new Error("Login failed");
-  return (await res.json()) as { token: string; address: string };
+  return (await res.json()) as { token: string; address: string; entryPaid?: boolean };
+}
+
+export async function fetchEntryStatus(token: string) {
+  const res = await fetch(`${API_BASE}/api/entry/status`, {
+    headers: getHeaders(token)
+  });
+  if (!res.ok) throw new Error("Failed to check entry status");
+  return (await res.json()) as {
+    paid: boolean;
+    txHash: string | null;
+    amountWei: string | null;
+    verifiedAt: string | null;
+  };
 }
 
 export async function verifyEntryPayment(token: string, txHash: string, amountWei: string) {

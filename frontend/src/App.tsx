@@ -38,6 +38,7 @@ import {
   buildOrUpgrade,
   collectBaseResources,
   claimDailyChest,
+  fetchEntryStatus,
   verifyEntryPayment
 } from "./api";
 import { useResources } from "./resources";
@@ -483,14 +484,19 @@ export default function App() {
       setToken(authRes.token);
       setAddressStored(authRes.address);
 
-      const txHash = (await walletRequest("eth_sendTransaction", [{
-        from: address,
-        to: ENTRY_RECEIVER,
-        value: `0x${amountWei.toString(16)}`
-      }])) as string;
-      setEntryTxHash(txHash);
-      await waitForReceipt(txHash);
-      await verifyEntryPayment(authRes.token, txHash, amountWei.toString());
+      const entryStatus = await fetchEntryStatus(authRes.token);
+      if (!entryStatus.paid) {
+        const txHash = (await walletRequest("eth_sendTransaction", [{
+          from: address,
+          to: ENTRY_RECEIVER,
+          value: `0x${amountWei.toString(16)}`
+        }])) as string;
+        setEntryTxHash(txHash);
+        await waitForReceipt(txHash);
+        await verifyEntryPayment(authRes.token, txHash, amountWei.toString());
+      } else if (entryStatus.txHash) {
+        setEntryTxHash(entryStatus.txHash);
+      }
       closeWalletModal();
 
       const state = await loadState(authRes.token);
