@@ -4,9 +4,9 @@ compatibility_date = "2025-01-01"
 
 [vars]
 API_ENV = "local"
-MONAD_RPC_URL = ""
+MONAD_RPC_URL = "https://rpc.monad.xyz"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "sea-battle"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "eb61f922-f915-4ab9-8a49-87b374e0f148"
