@@ -1512,6 +1512,46 @@ body {
   text-align: center;
 }
 
+.orientation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 16, 24, 0.9);
+  padding: 16px;
+  pointer-events: auto;
+}
+
+.orientation-card {
+  width: min(360px, 92vw);
+  background: rgba(10, 52, 64, 0.95);
+  border: 1px solid rgba(76, 201, 240, 0.45);
+  border-radius: 16px;
+  padding: 18px 16px;
+  display: grid;
+  gap: 10px;
+  text-align: center;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.orientation-icon {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.orientation-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #e8f7ff;
+}
+
+@media (orientation: landscape) {
+  .orientation-overlay {
+    display: none;
+  }
+}
+
 /* ── Mobile/Tablet responsiveness ── */
 @media (max-width: 768px) {
   .top-resource-bar {
