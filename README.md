@@ -17,7 +17,7 @@ Deterministic auto-battler MVP with Phaser 3 rendering and HTML/CSS overlay UI.
    ```
    VITE_API_BASE_URL=http://localhost:8787
    VITE_REOWN_PROJECT_ID=ea1688ed805d32b8ce09143baba1b155
-   VITE_MONAD_CHAIN_ID_HEX=0x279F
+   VITE_MONAD_CHAIN_ID_HEX=0x8f
    VITE_MONAD_CHAIN_NAME=Monad Mainnet
    VITE_MONAD_RPC_URL=<your_monad_rpc>
    VITE_ENTRY_FEE_MON=0.01
