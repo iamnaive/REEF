@@ -183,8 +183,8 @@ body {
 
 .pool-widget {
   position: relative;
-  width: 190px;
-  height: 58px;
+  width: 95px;
+  height: 29px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -198,15 +198,18 @@ body {
 
 .pool-widget-text {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  justify-items: center;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
   gap: 1px;
   color: #f4fbff;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-  font-size: 13px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1.1;
   text-align: center;
@@ -1605,12 +1608,12 @@ body {
 
   .pool-widget {
     order: 0;
-    width: 166px;
-    height: 52px;
+    width: 83px;
+    height: 26px;
   }
 
   .pool-widget-text {
-    font-size: 12px;
+    font-size: 8px;
   }
 
   .resource-group {
@@ -1760,12 +1763,12 @@ body {
   }
 
   .pool-widget {
-    width: 150px;
-    height: 46px;
+    width: 75px;
+    height: 23px;
   }
 
   .pool-widget-text {
-    font-size: 11px;
+    font-size: 8px;
   }
 
   .player-tag {
