@@ -42,7 +42,7 @@ import {
 } from "./api";
 import { useResources } from "./resources";
 import { fadeOutMenuLoop, playMenuLoop, playSfx, playRandomKnock, preloadSfx, setSfxEnabled } from "./game/sounds";
-import { getWalletProvider } from "./walletProvider";
+import { closeWalletModal, getWalletProvider } from "./walletProvider";
 
 type Screen =
   | "menu"
@@ -490,6 +490,7 @@ export default function App() {
       setEntryTxHash(txHash);
       await waitForReceipt(txHash);
       await verifyEntryPayment(authRes.token, txHash, amountWei.toString());
+      closeWalletModal();
 
       const state = await loadState(authRes.token);
       if (!state) throw new Error("Failed to load player state.");

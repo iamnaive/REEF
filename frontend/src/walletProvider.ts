@@ -9,6 +9,7 @@ export type Eip1193Provider = {
 
 type AppKitLike = {
   open: (options?: unknown) => Promise<unknown>;
+  close?: () => void;
   getWalletProvider: () => unknown;
   getAccount?: () => { isConnected?: boolean } | undefined;
   subscribeAccount?: (cb: (state: { isConnected?: boolean }) => void) => () => void;
@@ -144,4 +145,8 @@ export async function getWalletProvider(options: {
 
   activeProvider = wrappedProvider;
   return wrappedProvider;
+}
+
+export function closeWalletModal() {
+  appKit?.close?.();
 }
