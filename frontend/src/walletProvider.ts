@@ -60,14 +60,13 @@ export async function getWalletProvider(options: {
 }): Promise<Eip1193Provider> {
   if (activeProvider) return activeProvider;
 
-  injectedProvider = injectedProvider || getInjectedProvider();
-  // Prefer installed browser EVM wallets first for instant connection UX.
-  if (injectedProvider) {
-    activeProvider = injectedProvider;
-    return activeProvider;
-  }
-
+  // If Reown is configured, always prefer opening Reown UI first.
   if (!options.reownProjectId) {
+    injectedProvider = injectedProvider || getInjectedProvider();
+    if (injectedProvider) {
+      activeProvider = injectedProvider;
+      return activeProvider;
+    }
     throw new Error("Set VITE_REOWN_PROJECT_ID or install an injected EVM wallet.");
   }
 
@@ -109,12 +108,12 @@ export async function getWalletProvider(options: {
     activeProvider = wrappedProvider;
     return wrappedProvider;
   } catch {
-    // Fallback to injected provider only if WC init failed.
+    // If Reown is configured, do not silently fallback to injected providers.
+    // This guarantees the Reown UI flow (installed wallets list + connectors).
     wcInitPromise = null;
     wcProvider = null;
     wcConnected = false;
-    const injected = injectedProvider || getInjectedProvider();
-    if (injected) return injected;
-    throw new Error("Failed to initialize Reown provider.");
+    activeProvider = null;
+    throw new Error("Failed to initialize Reown provider. Check VITE_REOWN_PROJECT_ID and Reown allowed domains.");
   }
 }
