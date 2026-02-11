@@ -32,7 +32,6 @@ import {
   equipArtifact,
   openChest,
   prepareMatch,
-  resetDailyLimit,
   resolveMatch,
   fetchBase,
   buildOrUpgrade,
@@ -556,19 +555,6 @@ export default function App() {
     setMatchesLeft(res.matchesLeft);
     setResetAt(res.resetAt);
   }, [token, selectedLineup]);
-
-  const onResetDaily = async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const res = await resetDailyLimit(token);
-      setMatchesLeft(res.matchesLeft);
-      setResetAt(res.resetAt);
-      await onPrepareMatch();
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     if (screen === "pre" && token && selectedLineup.length === 3) {
@@ -1134,9 +1120,6 @@ export default function App() {
                         {matchesLeft === 0 && (
                           <div className="hint">
                             Reset in {resetTimer}
-                            <button className="ghost-button inline" onClick={onResetDaily}>
-                              Reset Daily (Dev)
-                            </button>
                           </div>
                         )}
                       </div>

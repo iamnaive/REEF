@@ -130,6 +130,38 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /** Emit a small burst of golden stars above the round winner */
+  private showWinStars(x: number, y: number) {
+    const count = 10;
+    for (let i = 0; i < count; i++) {
+      const star = this.add.star(
+        x + Phaser.Math.Between(-14, 14),
+        y - Phaser.Math.Between(30, 55),
+        5,
+        3.5,
+        7.5,
+        0xffd166,
+        0.95
+      );
+      star.setDepth(104);
+      star.setStrokeStyle(1, 0xfff2b3, 0.9);
+      star.setAngle(Phaser.Math.Between(-35, 35));
+
+      this.tweens.add({
+        targets: star,
+        x: star.x + Phaser.Math.Between(-40, 40),
+        y: star.y - Phaser.Math.Between(30, 80),
+        angle: star.angle + Phaser.Math.Between(-120, 120),
+        scaleX: Phaser.Math.FloatBetween(0.4, 0.85),
+        scaleY: Phaser.Math.FloatBetween(0.4, 0.85),
+        alpha: 0,
+        duration: Phaser.Math.Between(520, 820),
+        ease: "Cubic.easeOut",
+        onComplete: () => star.destroy()
+      });
+    }
+  }
+
   /** Simple tween — no pose changes */
   private moveTo(
     sprite: Phaser.GameObjects.Image,
@@ -300,6 +332,8 @@ export class BattleScene extends Phaser.Scene {
         this.pose(pSpr, pHero, pWins ? 5 : 6);
         this.pose(oSpr, oHero, pWins ? 6 : 5);
         playSfx(pWins ? "roundWin" : "roundLose");
+        const winner = pWins ? pSpr : oSpr;
+        this.showWinStars(winner.x, winner.y);
 
         /* ─ 6) Hold result ─ */
         await this.wait(375);
