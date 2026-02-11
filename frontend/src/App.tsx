@@ -41,7 +41,8 @@ import {
   verifyEntryPayment
 } from "./api";
 import { useResources } from "./resources";
-import { fadeOutMenuLoop, playMenuLoop, playSfx, playRandomKnock, preloadSfx } from "./game/sounds";
+import { fadeOutMenuLoop, playMenuLoop, playSfx, playRandomKnock, preloadSfx, setSfxEnabled } from "./game/sounds";
+import { getWalletProvider } from "./walletProvider";
 
 type Screen =
   | "menu"
@@ -53,11 +54,13 @@ type Screen =
 const STORAGE_TOKEN = "sea_battle_token";
 const STORAGE_ADDRESS = "sea_battle_address";
 const STORAGE_LINEUP = "sea_battle_lineup";
+const STORAGE_SFX_ENABLED = "sea_battle_sfx_enabled";
 const ENTRY_RECEIVER = "0x682D0091Df3FEd5Fb7DFFd6B5B4aDcD794f34043";
 const MONAD_CHAIN_HEX = (import.meta.env.VITE_MONAD_CHAIN_ID_HEX || "0x279F").toLowerCase();
 const MONAD_CHAIN_NAME = import.meta.env.VITE_MONAD_CHAIN_NAME || "Monad Mainnet";
 const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || "";
 const ENTRY_FEE_MON = import.meta.env.VITE_ENTRY_FEE_MON || "";
+const REOWN_PROJECT_ID = import.meta.env.VITE_REOWN_PROJECT_ID || "";
 
 export default function App() {
   const gameRef = useRef<PhaserGame | null>(null);
@@ -112,6 +115,10 @@ export default function App() {
   const [resetTimer, setResetTimer] = useState<string>("");
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem(STORAGE_SFX_ENABLED);
+    return saved == null ? true : saved === "1";
+  });
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [showWalletGate, setShowWalletGate] = useState(false);
@@ -316,19 +323,30 @@ export default function App() {
   }, [screen, resolution, selectedHero, phaserReady]);
 
   useEffect(() => {
+    setSfxEnabled(soundEnabled);
+    localStorage.setItem(STORAGE_SFX_ENABLED, soundEnabled ? "1" : "0");
+  }, [soundEnabled]);
+
+  useEffect(() => {
     if (screen === "battle") {
       fadeOutMenuLoop(260);
       return;
     }
-    playMenuLoop();
-  }, [screen]);
+    if (soundEnabled) {
+      playMenuLoop();
+    } else {
+      fadeOutMenuLoop(0);
+    }
+  }, [screen, soundEnabled]);
 
   const walletRequest = async (method: string, params?: unknown[]) => {
-    const ethereum = (window as Window & { ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } }).ethereum;
-    if (!ethereum) {
-      throw new Error("Wallet provider not found. Open with an injected wallet or WalletConnect provider.");
-    }
-    return ethereum.request({ method, params });
+    const provider = await getWalletProvider({
+      reownProjectId: REOWN_PROJECT_ID,
+      chainIdHex: MONAD_CHAIN_HEX,
+      chainName: MONAD_CHAIN_NAME,
+      rpcUrl: MONAD_RPC_URL
+    });
+    return provider.request({ method, params });
   };
 
   const ensureMonadNetwork = async () => {
@@ -938,6 +956,9 @@ export default function App() {
             </button>
             <button className="ghost-button" disabled style={{ opacity: 0.4, cursor: 'not-allowed' }}>
               Base
+            </button>
+            <button className="ghost-button" onClick={() => setSoundEnabled((prev) => !prev)}>
+              {soundEnabled ? "Sound: ON" : "Sound: OFF"}
             </button>
           </div>
         </div>

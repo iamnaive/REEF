@@ -65,6 +65,20 @@ function clearFadeTimer(key: SfxKey) {
 /** Enable or disable all sound effects */
 export function setSfxEnabled(enabled: boolean) {
   sfxEnabled = enabled;
+  if (!enabled) {
+    for (const key of Object.keys(SFX) as SfxKey[]) {
+      clearFadeTimer(key);
+      const audio = audioCache[key];
+      if (!audio) continue;
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = sfxVolume;
+    }
+    if (menuAudio) {
+      menuAudio.pause();
+      menuAudio.currentTime = 0;
+    }
+  }
 }
 
 /** Set master volume (0.0 — 1.0) */
