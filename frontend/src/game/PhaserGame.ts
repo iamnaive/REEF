@@ -7,17 +7,26 @@ import { BackgroundLoaderScene } from "./scenes/BackgroundLoaderScene";
 export class PhaserGame {
   private game: Phaser.Game;
   private readonly dpr: number;
+  private readonly parentId: string;
+  private resizeHandler?: () => void;
 
   constructor(parentId: string) {
-    this.dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    this.game = new Phaser.Game({
-      // Canvas is the most compatible mode for mobile browsers/webviews.
-      type: Phaser.CANVAS,
+    this.parentId = parentId;
+    // Cap DPR for stable performance + sharp output on mobile retina screens.
+    this.dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+    this.game = this.createGame(Phaser.AUTO);
+    this.resizeHandler = () => {
+      this.game.scale.resize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener("resize", this.resizeHandler);
+  }
+
+  private createGame(rendererType: number) {
+    return new Phaser.Game({
+      type: rendererType,
       backgroundColor: "#0a1026",
-      width,
-      height,
+      width: window.innerWidth,
+      height: window.innerHeight,
       resolution: this.dpr,
       autoRound: false,
       render: {
@@ -26,23 +35,17 @@ export class PhaserGame {
         pixelArt: false,
         roundPixels: false,
         powerPreference: "high-performance",
+        mipmapFilter: "LINEAR",
+        failIfMajorPerformanceCaveat: false,
         resolution: this.dpr
       },
       scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
-        parent: parentId
+        parent: this.parentId
       },
       scene: [BootScene, MenuScene, BattleScene, BackgroundLoaderScene]
     });
-    window.addEventListener("resize", () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      this.game.scale.resize(w, h);
-      const renderer = this.game.renderer as unknown as { resize?: (width: number, height: number) => void };
-      renderer.resize?.(w, h);
-    });
-
   }
 
   showMenu() {
