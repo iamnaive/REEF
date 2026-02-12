@@ -1669,74 +1669,116 @@ body {
   }
 
   .screen {
-    padding: 96px 10px 12px;
+    padding: 82px 8px 8px;
     justify-content: flex-start;
-    overflow-y: auto;
+    overflow: hidden;
   }
 
   .prematch-panel {
-    margin-top: 6px;
+    margin-top: 0;
     max-width: 100%;
   }
 
   .panel.prematch-panel {
     width: 100%;
     max-width: 100%;
-    padding: 10px;
-    border-radius: 12px;
+    height: calc(100dvh - 90px);
+    padding: 8px;
+    border-radius: 10px;
+    overflow: hidden;
   }
 
   .prematch-shell {
     width: 100%;
-    flex-direction: column;
-    gap: 10px;
+    height: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: 8px;
+    align-items: stretch;
   }
 
   .prematch-left {
     width: 100%;
-    gap: 6px;
+    min-height: 0;
+    gap: 4px;
   }
 
   .hero-showcase {
-    width: clamp(110px, 30vw, 150px);
-    height: clamp(110px, 30vw, 150px);
+    width: clamp(64px, 13vw, 92px);
+    height: clamp(64px, 13vw, 92px);
   }
 
   .lineup-section {
     width: 100%;
+    gap: 4px;
   }
 
   .lineup-slots {
     justify-content: center;
+    gap: 4px;
   }
 
   .lineup-slot {
-    width: 56px;
-    height: 56px;
+    width: 44px;
+    height: 44px;
+    border-radius: 9px;
   }
 
   .hero-picker.icons .hero-icon,
   .hero-icon {
-    width: 58px;
-    height: 58px;
+    width: 44px;
+    height: 44px;
+    border-radius: 9px;
   }
 
   .prematch-card {
     width: 100%;
-    min-height: auto;
-    padding: 46px 18px 14px;
-    border-radius: 14px;
+    min-height: 0;
+    height: 100%;
+    padding: 30px 10px 8px;
+    border-radius: 10px;
+    overflow: hidden;
   }
 
   .match-info-row {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
   }
 
   .match-start-button {
-    max-width: 220px;
-    height: 56px;
+    max-width: 168px;
+    height: 42px;
     margin-top: 0;
+  }
+
+  .prematch-card .label {
+    font-size: 9px;
+    margin-bottom: 1px;
+  }
+
+  .prematch-card .value {
+    font-size: 13px;
+    line-height: 1.1;
+  }
+
+  .prematch-card .hint,
+  .match-info-bonuses ul li {
+    font-size: 9px;
+    line-height: 1.15;
+  }
+
+  .match-info-bonuses ul {
+    margin: 2px 0 0;
+    padding-left: 12px;
+  }
+
+  .weather-card.large img {
+    width: 52px;
+    height: 52px;
+  }
+
+  .prematch-card-body {
+    gap: 8px;
   }
 
   .modal {
@@ -1812,29 +1854,53 @@ body {
   }
 
   .screen {
-    padding-top: 104px;
+    padding-top: 74px;
   }
 
   .lineup-slot {
-    width: 50px;
-    height: 50px;
+    width: 40px;
+    height: 40px;
     border-radius: 10px;
   }
 
   .hero-picker.icons .hero-icon,
   .hero-icon {
-    width: 52px;
-    height: 52px;
-    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
   }
 
   .prematch-card {
-    padding: 40px 12px 12px;
+    padding: 26px 8px 6px;
   }
 
   .match-start-button {
-    max-width: 196px;
-    height: 50px;
+    max-width: 150px;
+    height: 38px;
+  }
+
+  .panel.prematch-panel {
+    height: calc(100dvh - 80px);
+    padding: 6px;
+  }
+
+  .prematch-shell {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: 6px;
+  }
+
+  .hero-showcase {
+    width: 56px;
+    height: 56px;
+  }
+
+  .prematch-card .value {
+    font-size: 12px;
+  }
+
+  .prematch-card .hint,
+  .match-info-bonuses ul li {
+    font-size: 8px;
   }
 
   .chest-icon.reward {
