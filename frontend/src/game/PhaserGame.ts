@@ -6,8 +6,10 @@ import { BackgroundLoaderScene } from "./scenes/BackgroundLoaderScene";
 
 export class PhaserGame {
   private game: Phaser.Game;
+  private readonly dpr: number;
 
   constructor(parentId: string) {
+    this.dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
     const width = window.innerWidth;
     const height = window.innerHeight;
     this.game = new Phaser.Game({
@@ -16,6 +18,8 @@ export class PhaserGame {
       backgroundColor: "#0a1026",
       width,
       height,
+      resolution: this.dpr,
+      autoRound: false,
       scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
