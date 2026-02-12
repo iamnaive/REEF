@@ -87,6 +87,14 @@ function safeStorageRemove(key: string) {
   }
 }
 
+function isCoarsePointerDevice(): boolean {
+  try {
+    return typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const gameRef = useRef<PhaserGame | null>(null);
   const [screen, setScreen] = useState<Screen>("menu");
@@ -205,9 +213,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const devFreeze = params.get("freeze") === "1";
-    const devScreen = params.get("screen");
+    let devFreeze = false;
+    let devScreen: string | null = null;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      devFreeze = params.get("freeze") === "1";
+      devScreen = params.get("screen");
+    } catch {
+      // Ignore URL parsing issues in restricted webviews.
+    }
     if (devFreeze) setFreezeFlow(true);
     if (devScreen === "menu" || devScreen === "pre" || devScreen === "battle") {
       setScreen(devScreen);
@@ -904,7 +918,7 @@ export default function App() {
       const width = window.innerWidth;
       const height = window.innerHeight;
       const isPortrait = height > width;
-      const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+      const isCoarsePointer = isCoarsePointerDevice();
       const isMobileWidth = Math.min(width, height) <= 900;
       setIsMobilePortrait(isPortrait && isCoarsePointer && isMobileWidth);
     };
