@@ -10,12 +10,25 @@ function renderFatal(message: string) {
   root.innerHTML = `<div style="padding:16px;color:#fff;background:#0b1020;font-family:Arial,sans-serif;white-space:pre-wrap;">${message}</div>`;
 }
 
+function isExtensionNoise(input: unknown): boolean {
+  const text =
+    typeof input === "string"
+      ? input
+      : ((input as { stack?: string; message?: string } | undefined)?.stack ||
+        (input as { message?: string } | undefined)?.message ||
+        String(input || ""));
+  return text.includes("chrome-extension://") || text.includes("moz-extension://");
+}
+
 window.addEventListener("error", (event) => {
-  const message = event?.error?.stack || event?.message || "Unknown runtime error";
+  const err = event?.error || event?.message || "Unknown runtime error";
+  if (isExtensionNoise(err)) return;
+  const message = (err as { stack?: string; message?: string })?.stack || String(err);
   renderFatal(`Runtime error:\n${message}`);
 });
 
 window.addEventListener("unhandledrejection", (event) => {
+  if (isExtensionNoise(event.reason)) return;
   const reason = (event.reason as { stack?: string; message?: string } | undefined);
   const message = reason?.stack || reason?.message || String(event.reason || "Unknown promise rejection");
   renderFatal(`Unhandled promise rejection:\n${message}`);

@@ -1671,7 +1671,8 @@ body {
   .screen {
     padding: 82px 8px 8px;
     justify-content: flex-start;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .prematch-panel {
@@ -1685,7 +1686,7 @@ body {
     height: calc(100dvh - 90px);
     padding: 8px;
     border-radius: 10px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .prematch-shell {
@@ -1737,7 +1738,7 @@ body {
     height: 100%;
     padding: 30px 10px 8px;
     border-radius: 10px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .match-info-row {
@@ -1763,8 +1764,8 @@ body {
 
   .prematch-card .hint,
   .match-info-bonuses ul li {
-    font-size: 9px;
-    line-height: 1.15;
+    font-size: 10px;
+    line-height: 1.22;
   }
 
   .match-info-bonuses ul {
@@ -1773,8 +1774,8 @@ body {
   }
 
   .weather-card.large img {
-    width: 52px;
-    height: 52px;
+    width: 58px;
+    height: 58px;
   }
 
   .prematch-card-body {
@@ -1855,6 +1856,7 @@ body {
 
   .screen {
     padding-top: 74px;
+    overflow-y: auto;
   }
 
   .lineup-slot {
@@ -1871,12 +1873,12 @@ body {
   }
 
   .prematch-card {
-    padding: 26px 8px 6px;
+    padding: 24px 8px 8px;
   }
 
   .match-start-button {
-    max-width: 150px;
-    height: 38px;
+    max-width: 168px;
+    height: 42px;
   }
 
   .panel.prematch-panel {
@@ -1900,7 +1902,13 @@ body {
 
   .prematch-card .hint,
   .match-info-bonuses ul li {
-    font-size: 8px;
+    font-size: 9px;
+    line-height: 1.2;
+  }
+
+  .weather-card.large img {
+    width: 52px;
+    height: 52px;
   }
 
   .chest-icon.reward {

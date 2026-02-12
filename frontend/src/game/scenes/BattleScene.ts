@@ -56,16 +56,27 @@ export class BattleScene extends Phaser.Scene {
     return new Promise((r) => this.time.delayedCall(ms, r));
   }
 
+  private getViewportScale() {
+    const w = this.scale.width || this.game.scale.width;
+    const h = this.scale.height || this.game.scale.height;
+    const base = Math.min(w, h);
+    return Phaser.Math.Clamp(base / 900, 0.58, 1);
+  }
+
   /** Show BANG text + smoke clouds at a given position */
   private showImpact(x: number, y: number) {
+    const s = this.getViewportScale();
+    const bangSize = Math.round(72 * s);
+    const stroke = Math.max(4, Math.round(8 * s));
+
     // ── BANG text ──
     const bang = this.add.text(x, y, "BANG!", {
       fontFamily: '"Montserrat", sans-serif',
-      fontSize: "72px",
+      fontSize: `${bangSize}px`,
       fontStyle: "bold",
       color: "#ffe040",
       stroke: "#a83200",
-      strokeThickness: 8,
+      strokeThickness: stroke,
       shadow: { offsetX: 3, offsetY: 3, color: "rgba(0,0,0,0.5)", blur: 6, fill: true }
     });
     bang.setOrigin(0.5, 0.5);
@@ -84,11 +95,11 @@ export class BattleScene extends Phaser.Scene {
     });
 
     // ── Smoke clouds ──
-    const smokeCount = 8;
+    const smokeCount = Math.max(6, Math.round(8 * s));
     for (let i = 0; i < smokeCount; i++) {
       const angle = (Math.PI * 2 * i) / smokeCount + (Math.random() - 0.5) * 0.5;
-      const dist = 80 + Math.random() * 100;
-      const size = 20 + Math.random() * 30;
+      const dist = (80 + Math.random() * 100) * s;
+      const size = (20 + Math.random() * 30) * s;
 
       const cloud = this.add.circle(x, y, size, 0xcccccc, 0.7);
       cloud.setDepth(99);
@@ -107,11 +118,11 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // ── Extra small sparks ──
-    const sparkCount = 6;
+    const sparkCount = Math.max(4, Math.round(6 * s));
     for (let i = 0; i < sparkCount; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const dist = 60 + Math.random() * 80;
-      const sz = 4 + Math.random() * 6;
+      const dist = (60 + Math.random() * 80) * s;
+      const sz = (4 + Math.random() * 6) * s;
 
       const spark = this.add.circle(x, y, sz, 0xffee88, 0.9);
       spark.setDepth(101);
@@ -224,10 +235,11 @@ export class BattleScene extends Phaser.Scene {
   private getLayout() {
     const w = this.scale.width || this.game.scale.width;
     const h = this.scale.height || this.game.scale.height;
+    const s = this.getViewportScale();
     return {
       width: w,
       height: h,
-      groundY: h * 0.68,
+      groundY: h * (h < 620 ? 0.71 : 0.68),
       // starting (home) positions
       playerHomeX: w * 0.2,
       opponentHomeX: w * 0.8,
@@ -237,7 +249,10 @@ export class BattleScene extends Phaser.Scene {
       // corners for losers
       playerCornerX: w * 0.06,
       opponentCornerX: w * 0.94,
-      cornerY: h * 0.85
+      cornerY: h * 0.85,
+      heroHeight: this.tuning.heroHeight * s,
+      offscreenX: Math.round(260 * s),
+      defeatedStackStep: Math.round(70 * s)
     };
   }
 
@@ -261,18 +276,18 @@ export class BattleScene extends Phaser.Scene {
 
     // Create ALL sprites but keep them invisible + off-screen
     this.playerSprites = playerLineup.map((hero) => {
-      const s = this.add.image(-300, layout.groundY, this.resolveKey(`${this.norm(hero)}_pose_1`));
-      s.setFlipX(true);
-      scaleToHeight(s, this.tuning.heroHeight);
-      s.setAlpha(0);
-      return s;
+      const sprite = this.add.image(-layout.offscreenX, layout.groundY, this.resolveKey(`${this.norm(hero)}_pose_1`));
+      sprite.setFlipX(true);
+      scaleToHeight(sprite, layout.heroHeight);
+      sprite.setAlpha(0);
+      return sprite;
     });
 
     this.opponentSprites = opponentLineup.map((opp) => {
-      const s = this.add.image(layout.width + 300, layout.groundY, this.resolveKey(`${this.norm(opp.hero)}_pose_1`));
-      scaleToHeight(s, this.tuning.heroHeight);
-      s.setAlpha(0);
-      return s;
+      const sprite = this.add.image(layout.width + layout.offscreenX, layout.groundY, this.resolveKey(`${this.norm(opp.hero)}_pose_1`));
+      scaleToHeight(sprite, layout.heroHeight);
+      sprite.setAlpha(0);
+      return sprite;
     });
 
     /* ── main battle loop ── */
@@ -343,7 +358,7 @@ export class BattleScene extends Phaser.Scene {
           // Opponent lost → flies to opponent (right) corner in lose pose
           playSfx("heroDefeated");
           const sc = oSpr.scaleX;
-          const oCornerX = layout.opponentCornerX - oLosses * 80;
+          const oCornerX = layout.opponentCornerX - oLosses * layout.defeatedStackStep;
           await Promise.all([
             this.tweenProps(oSpr, { scaleX: sc * 0.7, scaleY: sc * 0.7 }, 600),
             this.moveTo(oSpr, { x: oCornerX, y: layout.cornerY }, 700)
@@ -359,7 +374,7 @@ export class BattleScene extends Phaser.Scene {
           if (oIdx < opponentLineup.length) {
             const nHero = this.norm(opponentLineup[oIdx].hero);
             const nSpr = this.opponentSprites[oIdx];
-            nSpr.setPosition(layout.width + 300, layout.groundY);
+            nSpr.setPosition(layout.width + layout.offscreenX, layout.groundY);
             nSpr.setAlpha(1);
             this.pose(nSpr, nHero, 1);
             await this.moveTo(nSpr, { x: layout.opponentHomeX, y: layout.groundY }, 500);
@@ -368,7 +383,7 @@ export class BattleScene extends Phaser.Scene {
           // Player lost → flies to player (left) corner in lose pose
           playSfx("heroDefeated");
           const sc = pSpr.scaleX;
-          const pCornerX = layout.playerCornerX + pLosses * 80;
+          const pCornerX = layout.playerCornerX + pLosses * layout.defeatedStackStep;
           await Promise.all([
             this.tweenProps(pSpr, { scaleX: sc * 0.7, scaleY: sc * 0.7 }, 600),
             this.moveTo(pSpr, { x: pCornerX, y: layout.cornerY }, 700)
@@ -384,7 +399,7 @@ export class BattleScene extends Phaser.Scene {
           if (pIdx < playerLineup.length) {
             const nHero = this.norm(playerLineup[pIdx]);
             const nSpr = this.playerSprites[pIdx];
-            nSpr.setPosition(-300, layout.groundY);
+            nSpr.setPosition(-layout.offscreenX, layout.groundY);
             nSpr.setAlpha(1);
             this.pose(nSpr, nHero, 1);
             await this.moveTo(nSpr, { x: layout.playerHomeX, y: layout.groundY }, 500);
