@@ -34,6 +34,7 @@ type Env = {
   MONAD_RPC_URL?: string;
   ENTRY_RECEIVER?: string;
   ENTRY_FEE_WEI?: string;
+  POOL_BASE_WEI?: string;
 };
 
 const router = Router();
@@ -47,6 +48,7 @@ const RATE_LIMIT_PER_MIN = 60;
 const NONCE_TTL_MS = 5 * 60 * 1000;
 const MATCH_BANK_DAY_CAP = 3;
 const MATCH_BANK_MAX = MATCH_LIMIT_PER_DAY * MATCH_BANK_DAY_CAP;
+const MAX_RECENT_PROJECTIONS_PER_WEATHER = 20;
 router.options("*", () => new Response(null, { headers: CORS_HEADERS }));
 
 router.get("/api/health", () => json({ ok: true }));
@@ -156,28 +158,25 @@ router.post("/api/shop/buy", async (request: Request, env: Env) => {
   await ensureLeaderboardTable(env);
   await ensureInventoryTables(env);
 
-  const existing = await env.DB.prepare(
-    "SELECT id FROM inventory_items WHERE address = ? AND artifact_id = ?"
-  )
-    .bind(auth.address, artifact.id)
-    .first<{ id: string }>();
-  if (existing?.id) return json({ error: "Already owned" }, 409);
-
-  const resources = await getResources(env, auth.address);
-  if (resources.coins < artifact.cost.coins) {
+  const now = new Date().toISOString();
+  const itemId = nanoid(12);
+  const debit = await env.DB.prepare(
+    "UPDATE leaderboard_stats SET coins = coins - ?, updated_at = ? WHERE address = ? AND coins >= ?"
+  ).bind(artifact.cost.coins, now, auth.address, artifact.cost.coins).run();
+  if ((debit.meta.changes || 0) !== 1) {
     return json({ error: "Not enough coins" }, 400);
   }
 
-  const now = new Date().toISOString();
-  const itemId = nanoid(12);
-  await env.DB.batch([
-    env.DB.prepare(
-      "INSERT INTO inventory_items (id, address, artifact_id, hero, slot, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).bind(itemId, auth.address, artifact.id, artifact.hero, artifact.slot, now),
-    env.DB.prepare(
-      "UPDATE leaderboard_stats SET coins = coins - ?, updated_at = ? WHERE address = ?"
-    ).bind(artifact.cost.coins, now, auth.address)
-  ]);
+  const insert = await env.DB.prepare(
+    "INSERT INTO inventory_items (id, address, artifact_id, hero, slot, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(address, artifact_id) DO NOTHING"
+  ).bind(itemId, auth.address, artifact.id, artifact.hero, artifact.slot, now).run();
+  if ((insert.meta.changes || 0) !== 1) {
+    // Another concurrent request already bought this item; refund this debit.
+    await env.DB.prepare(
+      "UPDATE leaderboard_stats SET coins = coins + ?, updated_at = ? WHERE address = ?"
+    ).bind(artifact.cost.coins, now, auth.address).run();
+    return json({ error: "Already owned" }, 409);
+  }
 
   const updatedResources = await getResources(env, auth.address);
 
@@ -465,13 +464,23 @@ router.post("/api/onboarding/claim", async (request: Request, env: Env) => {
   if (!auth) return json({ error: "Payment required" }, 402);
 
   const { address } = auth;
-  const existing = await env.DB.prepare(
-    "SELECT has_onboarded FROM users WHERE address = ?"
-  )
-    .bind(address)
-    .first<{ has_onboarded: number }>();
 
-  if (existing?.has_onboarded === 1) {
+  const rewards: RewardPayload = {
+    coins: 0,
+    pearls: 0,
+    shards: 0,
+    items: [],
+    heroes: ["Shark", "Whale", "Shrimp"]
+  };
+
+  const chestId = nanoid(12);
+  const now = new Date().toISOString();
+  const claim = await env.DB.prepare(
+    "UPDATE users SET has_onboarded = 1, heroes_json = ?, last_active = ? WHERE address = ? AND has_onboarded = 0"
+  )
+    .bind(JSON.stringify(rewards.heroes), now, address)
+    .run();
+  if ((claim.meta.changes || 0) !== 1) {
     const chest = await env.DB.prepare(
       "SELECT id, rewards_json FROM chests WHERE address = ? AND type = 'onboarding' ORDER BY created_at DESC LIMIT 1"
     )
@@ -486,26 +495,10 @@ router.post("/api/onboarding/claim", async (request: Request, env: Env) => {
     return json({ error: "Already onboarded" }, 409);
   }
 
-  const rewards: RewardPayload = {
-    coins: 100,
-    pearls: 25,
-    shards: 5,
-    items: [],
-    heroes: ["Shark", "Whale", "Shrimp"]
-  };
-
-  const chestId = nanoid(12);
-  const now = new Date().toISOString();
   await env.DB.prepare(
     "INSERT INTO chests (id, address, type, rewards_json, created_at) VALUES (?, ?, 'onboarding', ?, ?)"
   )
     .bind(chestId, address, JSON.stringify(rewards), now)
-    .run();
-
-  await env.DB.prepare(
-    "UPDATE users SET has_onboarded = 1, heroes_json = ?, last_active = ? WHERE address = ?"
-  )
-    .bind(JSON.stringify(rewards.heroes), now, address)
     .run();
 
   await applyRewards(env, address, rewards);
@@ -721,14 +714,17 @@ router.post("/api/match/resolve", async (request: Request, env: Env) => {
   const rewards = rollRewards(rng, result, streakLevel);
   const chestId = nanoid(12);
   const now = new Date().toISOString();
+  const lock = await env.DB.prepare(
+    "DELETE FROM pending_matches WHERE id = ? AND address = ?"
+  ).bind(match.id, auth.address).run();
+  if ((lock.meta.changes || 0) !== 1) {
+    return json({ error: "Match already resolved" }, 409);
+  }
 
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO chests (id, address, type, match_id, rewards_json, created_at) VALUES (?, ?, 'match', ?, ?, ?)"
     ).bind(chestId, auth.address, match.id, JSON.stringify(rewards), now),
-    env.DB.prepare(
-      "DELETE FROM pending_matches WHERE id = ?"
-    ).bind(match.id),
     env.DB.prepare(
       "INSERT INTO projections (id, address, hero, lineup_json, weather_id, upgrades_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET hero = excluded.hero, lineup_json = excluded.lineup_json, weather_id = excluded.weather_id, upgrades_json = excluded.upgrades_json, updated_at = excluded.updated_at"
     ).bind(
@@ -741,6 +737,7 @@ router.post("/api/match/resolve", async (request: Request, env: Env) => {
       now
     )
   ]);
+  await trimOldWeatherProjections(env, weather.id, MAX_RECENT_PROJECTIONS_PER_WEATHER);
   await spendMatchFromBank(env, auth.address);
 
   await updateLeaderboardMatch(env, auth.address, result === "win", streakLevel);
@@ -798,10 +795,14 @@ router.post("/api/chest/open", async (request: Request, env: Env) => {
   if (!chest) return json({ error: "Chest not found" }, 404);
 
   if (!chest.opened_at) {
-    await env.DB.prepare("UPDATE chests SET opened_at = ? WHERE id = ?")
-      .bind(new Date().toISOString(), parsed.data.chestId)
+    const opened = await env.DB.prepare(
+      "UPDATE chests SET opened_at = ? WHERE id = ? AND address = ? AND opened_at IS NULL"
+    )
+      .bind(new Date().toISOString(), parsed.data.chestId, auth.address)
       .run();
-    await applyRewards(env, auth.address, JSON.parse(chest.rewards_json) as RewardPayload);
+    if ((opened.meta.changes || 0) === 1) {
+      await applyRewards(env, auth.address, JSON.parse(chest.rewards_json) as RewardPayload);
+    }
   }
 
   const response = {
@@ -1363,8 +1364,8 @@ async function pickOpponentLineup(
 ): Promise<OpponentProfile[]> {
   // Priority 1: real player projections for this weather (exclude seeds)
   const realWeatherRows = await env.DB.prepare(
-    "SELECT id, hero, lineup_json, upgrades_json FROM projections WHERE weather_id = ? AND id NOT LIKE 'seed-%' ORDER BY updated_at DESC LIMIT 30"
-  ).bind(weatherId).all<{ id: string; hero: HeroType; lineup_json: string; upgrades_json: string }>();
+    "SELECT id, hero, lineup_json, upgrades_json FROM projections WHERE weather_id = ? AND id NOT LIKE 'seed-%' ORDER BY updated_at DESC LIMIT ?"
+  ).bind(weatherId, MAX_RECENT_PROJECTIONS_PER_WEATHER).all<{ id: string; hero: HeroType; lineup_json: string; upgrades_json: string }>();
 
   if (realWeatherRows.results.length > 0) {
     const pick = realWeatherRows.results[Math.floor(rng() * realWeatherRows.results.length)];
@@ -1380,8 +1381,8 @@ async function pickOpponentLineup(
 
   // Priority 2: any projections for this weather (including seeds)
   const weatherRows = await env.DB.prepare(
-    "SELECT id, hero, lineup_json, upgrades_json FROM projections WHERE weather_id = ? ORDER BY updated_at DESC LIMIT 30"
-  ).bind(weatherId).all<{ id: string; hero: HeroType; lineup_json: string; upgrades_json: string }>();
+    "SELECT id, hero, lineup_json, upgrades_json FROM projections WHERE weather_id = ? ORDER BY updated_at DESC LIMIT ?"
+  ).bind(weatherId, MAX_RECENT_PROJECTIONS_PER_WEATHER).all<{ id: string; hero: HeroType; lineup_json: string; upgrades_json: string }>();
 
   if (weatherRows.results.length > 0) {
     const pick = weatherRows.results[Math.floor(rng() * weatherRows.results.length)];
@@ -1401,6 +1402,14 @@ async function pickOpponentLineup(
     lineup.push(await pickOpponent(env, rng));
   }
   return lineup;
+}
+
+async function trimOldWeatherProjections(env: Env, weatherId: string, keep: number) {
+  await env.DB.prepare(
+    "DELETE FROM projections WHERE weather_id = ? AND id NOT LIKE 'seed-%' AND id NOT IN (SELECT id FROM projections WHERE weather_id = ? AND id NOT LIKE 'seed-%' ORDER BY updated_at DESC LIMIT ?)"
+  )
+    .bind(weatherId, weatherId, keep)
+    .run();
 }
 
 async function pickOpponent(env: Env, rng: () => number): Promise<OpponentProfile> {
@@ -1593,6 +1602,9 @@ async function ensureInventoryTables(env: Env) {
     ),
     env.DB.prepare(
       "CREATE INDEX IF NOT EXISTS idx_inventory_address_artifact ON inventory_items (address, artifact_id)"
+    ),
+    env.DB.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS ux_inventory_address_artifact ON inventory_items (address, artifact_id)"
     )
   ]);
   inventoryTablesReady = true;
@@ -1846,12 +1858,13 @@ async function getPoolStats(env: Env): Promise<{
   totalMon: string;
 }> {
   await ensureEntryPaymentsTable(env);
+  const baseWei = parseOptionalWei(env.POOL_BASE_WEI);
   const rows = await env.DB.prepare(
     "SELECT address, amount_wei FROM entry_payments"
   ).all<{ address: string; amount_wei: string }>();
 
   const uniquePlayers = new Set<string>();
-  let totalWei = 0n;
+  let totalWei = baseWei;
 
   for (const row of rows.results) {
     uniquePlayers.add((row.address || "").toLowerCase());
@@ -1867,6 +1880,14 @@ async function getPoolStats(env: Env): Promise<{
     totalWei: totalWei.toString(),
     totalMon: formatWeiToMon(totalWei)
   };
+}
+
+function parseOptionalWei(raw: string | undefined): bigint {
+  const value = `${raw || ""}`.trim();
+  if (!value) return 0n;
+  if (!/^[0-9]+$/.test(value)) return 0n;
+  const wei = BigInt(value);
+  return wei >= 0n ? wei : 0n;
 }
 
 function formatWeiToMon(wei: bigint): string {

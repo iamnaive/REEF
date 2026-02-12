@@ -155,6 +155,7 @@ CREATE INDEX IF NOT EXISTS idx_match_bank_address ON match_bank (address);
 CREATE INDEX IF NOT EXISTS idx_chests_address ON chests (address);
 CREATE INDEX IF NOT EXISTS idx_inventory_address ON inventory_items (address);
 CREATE INDEX IF NOT EXISTS idx_inventory_address_artifact ON inventory_items (address, artifact_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_inventory_address_artifact ON inventory_items (address, artifact_id);
 CREATE INDEX IF NOT EXISTS idx_pending_matches_address ON pending_matches (address);
 CREATE INDEX IF NOT EXISTS idx_base_buildings_address ON base_buildings (address);
 CREATE INDEX IF NOT EXISTS idx_daily_chest_address ON daily_chest_claims (address);

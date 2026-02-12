@@ -485,13 +485,18 @@ export default function App() {
       setToken(authRes.token);
       setAddressStored(authRes.address);
 
-      let entryStatus: { paid: boolean; txHash: string | null } = { paid: false, txHash: null };
+      let entryStatus: { paid: boolean; txHash: string | null } = {
+        paid: Boolean(authRes.entryPaid),
+        txHash: null
+      };
       try {
         const status = await fetchEntryStatus(authRes.token);
         entryStatus = { paid: status.paid, txHash: status.txHash };
       } catch {
-        // Backward-compatible fallback: if the API does not expose /api/entry/status yet,
-        // continue with the regular payment flow instead of blocking login.
+        // Do not auto-charge if status check is unavailable: safer to retry than risk a duplicate payment.
+        if (!entryStatus.paid) {
+          throw new Error("Failed to check entry status. Please retry to avoid duplicate payment.");
+        }
       }
       if (!entryStatus.paid) {
         const txHash = (await walletRequest("eth_sendTransaction", [{
