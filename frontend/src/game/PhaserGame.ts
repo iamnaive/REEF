@@ -9,7 +9,7 @@ export class PhaserGame {
   private readonly dpr: number;
 
   constructor(parentId: string) {
-    this.dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+    this.dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
     const width = window.innerWidth;
     const height = window.innerHeight;
     this.game = new Phaser.Game({
@@ -20,6 +20,14 @@ export class PhaserGame {
       height,
       resolution: this.dpr,
       autoRound: false,
+      render: {
+        antialias: true,
+        antialiasGL: true,
+        pixelArt: false,
+        roundPixels: false,
+        powerPreference: "high-performance",
+        resolution: this.dpr
+      },
       scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -28,7 +36,11 @@ export class PhaserGame {
       scene: [BootScene, MenuScene, BattleScene, BackgroundLoaderScene]
     });
     window.addEventListener("resize", () => {
-      this.game.scale.resize(window.innerWidth, window.innerHeight);
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      this.game.scale.resize(w, h);
+      const renderer = this.game.renderer as unknown as { resize?: (width: number, height: number) => void };
+      renderer.resize?.(w, h);
     });
 
   }
