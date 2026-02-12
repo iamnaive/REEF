@@ -6,45 +6,52 @@ import { BackgroundLoaderScene } from "./scenes/BackgroundLoaderScene";
 
 export class PhaserGame {
   private game: Phaser.Game;
-  private readonly dpr: number;
-  private readonly parentId: string;
-  private resizeHandler?: () => void;
+  private rafId = 0;
 
   constructor(parentId: string) {
-    this.parentId = parentId;
-    // Cap DPR for stable performance + sharp output on mobile retina screens.
-    this.dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
-    this.game = this.createGame(Phaser.AUTO);
-    this.resizeHandler = () => {
-      this.game.scale.resize(window.innerWidth, window.innerHeight);
-    };
-    window.addEventListener("resize", this.resizeHandler);
-  }
+    // Use the device's native pixel ratio (cap at 3 for GPU sanity on ultra-high-DPI).
+    // This is the single most important setting for sharp rendering on retina screens.
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
 
-  private createGame(rendererType: number) {
-    return new Phaser.Game({
-      type: rendererType,
+    this.game = new Phaser.Game({
+      type: Phaser.AUTO,
       backgroundColor: "#0a1026",
       width: window.innerWidth,
       height: window.innerHeight,
-      resolution: this.dpr,
-      autoRound: false,
+      // `resolution` tells Phaser to create the canvas drawing buffer at
+      // width*dpr × height*dpr, then CSS-display it at width × height.
+      // This is what makes the image crisp on retina / mobile screens.
+      resolution: dpr,
       render: {
         antialias: true,
         antialiasGL: true,
         pixelArt: false,
         roundPixels: false,
         powerPreference: "high-performance",
-        mipmapFilter: "LINEAR",
-        failIfMajorPerformanceCaveat: false,
-        resolution: this.dpr
+        failIfMajorPerformanceCaveat: false
       },
       scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
-        parent: this.parentId
+        parent: parentId
       },
       scene: [BootScene, MenuScene, BattleScene, BackgroundLoaderScene]
+    });
+
+    // Debounced resize via requestAnimationFrame — prevents layout thrashing
+    // on rapid resize/orientation events (especially iOS Safari toolbar show/hide).
+    const scheduleResize = () => {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = requestAnimationFrame(() => {
+        this.game.scale.resize(window.innerWidth, window.innerHeight);
+      });
+    };
+
+    window.addEventListener("resize", scheduleResize);
+
+    // iOS Safari needs a short delay after orientationchange to report correct dimensions.
+    window.addEventListener("orientationchange", () => {
+      setTimeout(scheduleResize, 150);
     });
   }
 

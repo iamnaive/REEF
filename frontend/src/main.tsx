@@ -4,6 +4,18 @@ import App from "./App";
 import "./styles.css";
 import { ResourceProvider } from "./resources";
 
+/* ── iOS Safari viewport height fix ──
+ * On mobile Safari the toolbar slides in/out, making CSS `100vh` unreliable.
+ * We compute the real visible height and expose it as a CSS custom property
+ * that the rest of the CSS uses via `var(--app-height, 100dvh)`.
+ */
+function setAppHeight() {
+  document.documentElement.style.setProperty("--app-height", `${window.innerHeight}px`);
+}
+setAppHeight();
+window.addEventListener("resize", setAppHeight);
+window.addEventListener("orientationchange", () => setTimeout(setAppHeight, 150));
+
 function renderFatal(message: string) {
   const root = document.getElementById("root");
   if (!root) return;
