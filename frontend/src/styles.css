@@ -1934,3 +1934,106 @@ body {
     width: 104px;
   }
 }
+
+/* Extra-compact landscape phones (Safari toolbars eat vertical space). */
+@media (orientation: landscape) and (max-height: 520px) {
+  .screen {
+    padding: 72px 6px 6px;
+    overflow: hidden;
+  }
+
+  .panel.prematch-panel {
+    height: calc(100dvh - 78px);
+    padding: 6px;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .prematch-shell {
+    height: 100%;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 6px;
+  }
+
+  .prematch-left {
+    gap: 3px;
+  }
+
+  .hero-showcase {
+    width: 54px;
+    height: 54px;
+  }
+
+  .lineup-section {
+    gap: 3px;
+  }
+
+  .lineup-slots {
+    gap: 3px;
+    margin: 2px 0 4px;
+  }
+
+  .lineup-slot,
+  .hero-picker.icons .hero-icon,
+  .hero-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 7px;
+  }
+
+  .lineup-slot .slot-index {
+    font-size: 8px;
+    right: 4px;
+    bottom: 2px;
+  }
+
+  .prematch-card {
+    padding: 20px 8px 6px;
+    border-radius: 8px;
+  }
+
+  .prematch-card-body {
+    gap: 6px;
+  }
+
+  .weather-card.large img {
+    width: 44px;
+    height: 44px;
+  }
+
+  .weather-content {
+    gap: 8px;
+  }
+
+  .prematch-card .label {
+    font-size: 8px;
+    margin-bottom: 0;
+  }
+
+  .prematch-card .value {
+    font-size: 11px;
+    line-height: 1.08;
+  }
+
+  .prematch-card .hint,
+  .match-info-bonuses ul li {
+    font-size: 8px;
+    line-height: 1.1;
+  }
+
+  .match-info-row {
+    gap: 4px;
+  }
+
+  .match-info-bonuses ul {
+    margin-top: 1px;
+    padding-left: 10px;
+    gap: 1px;
+  }
+
+  .match-start-button {
+    max-width: 136px;
+    height: 34px;
+    margin-top: -1px;
+  }
+}

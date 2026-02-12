@@ -60,7 +60,7 @@ export class BattleScene extends Phaser.Scene {
     const w = this.scale.width || this.game.scale.width;
     const h = this.scale.height || this.game.scale.height;
     const base = Math.min(w, h);
-    return Phaser.Math.Clamp(base / 900, 0.58, 1);
+    return Phaser.Math.Clamp(base / 900, 0.78, 1.08);
   }
 
   /** Show BANG text + smoke clouds at a given position */
@@ -236,23 +236,24 @@ export class BattleScene extends Phaser.Scene {
     const w = this.scale.width || this.game.scale.width;
     const h = this.scale.height || this.game.scale.height;
     const s = this.getViewportScale();
+    const compactLandscape = h < 560;
     return {
       width: w,
       height: h,
-      groundY: h * (h < 620 ? 0.71 : 0.68),
+      groundY: compactLandscape ? h * 0.64 : h * 0.68,
       // starting (home) positions
-      playerHomeX: w * 0.2,
-      opponentHomeX: w * 0.8,
+      playerHomeX: compactLandscape ? w * 0.24 : w * 0.2,
+      opponentHomeX: compactLandscape ? w * 0.76 : w * 0.8,
       // clash positions (near center)
-      playerClashX: w * 0.42,
-      opponentClashX: w * 0.58,
+      playerClashX: w * 0.44,
+      opponentClashX: w * 0.56,
       // corners for losers
       playerCornerX: w * 0.06,
       opponentCornerX: w * 0.94,
-      cornerY: h * 0.85,
+      cornerY: compactLandscape ? h * 0.8 : h * 0.85,
       heroHeight: this.tuning.heroHeight * s,
-      offscreenX: Math.round(260 * s),
-      defeatedStackStep: Math.round(70 * s)
+      offscreenX: Math.round(220 * s),
+      defeatedStackStep: Math.round(54 * s)
     };
   }
 
