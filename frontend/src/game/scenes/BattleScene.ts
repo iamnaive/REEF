@@ -251,7 +251,7 @@ export class BattleScene extends Phaser.Scene {
       playerCornerX: w * 0.06,
       opponentCornerX: w * 0.94,
       cornerY: compactLandscape ? h * 0.8 : h * 0.85,
-      heroHeight: this.tuning.heroHeight * s,
+      heroHeight: this.tuning.heroHeight * s * 0.8,
       offscreenX: Math.round(220 * s),
       defeatedStackStep: Math.round(54 * s)
     };

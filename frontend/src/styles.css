@@ -1778,8 +1778,36 @@ body {
     height: 58px;
   }
 
+  .match-info-weather {
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  .match-info-weather .weather-content {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .match-info-weather .value {
+    font-size: 12px;
+    line-height: 1.12;
+  }
+
+  .match-info-weather .hint {
+    font-size: 9px;
+    line-height: 1.15;
+  }
+
   .prematch-card-body {
     gap: 8px;
+  }
+
+  .match-info-matches,
+  .match-info-bonuses {
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.16);
+    padding: 6px 8px;
   }
 
   .modal {
@@ -1911,6 +1939,24 @@ body {
     height: 52px;
   }
 
+  .match-info-weather {
+    padding: 5px 7px;
+    border-radius: 8px;
+  }
+
+  .match-info-weather .value {
+    font-size: 11px;
+  }
+
+  .match-info-weather .hint {
+    font-size: 8px;
+  }
+
+  .match-info-matches,
+  .match-info-bonuses {
+    padding: 5px 7px;
+  }
+
   .chest-icon.reward {
     width: 150px;
     height: 150px;
@@ -2001,6 +2047,21 @@ body {
     height: 44px;
   }
 
+  .match-info-weather {
+    padding: 4px 6px;
+    border-radius: 8px;
+  }
+
+  .match-info-weather .value {
+    font-size: 10px;
+    line-height: 1.08;
+  }
+
+  .match-info-weather .hint {
+    font-size: 8px;
+    line-height: 1.05;
+  }
+
   .weather-content {
     gap: 8px;
   }
@@ -2023,6 +2084,12 @@ body {
 
   .match-info-row {
     gap: 4px;
+  }
+
+  .match-info-matches,
+  .match-info-bonuses {
+    padding: 4px 6px;
+    border-radius: 7px;
   }
 
   .match-info-bonuses ul {
