@@ -4,6 +4,7 @@ import { eventBus } from "./game/eventBus";
 import {
   HEROES,
   HeroType,
+  MatchResult,
   MatchPreview,
   MatchResolution,
   RewardPayload,
@@ -63,45 +64,22 @@ const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || "";
 const ENTRY_FEE_MON = import.meta.env.VITE_ENTRY_FEE_MON || "";
 const REOWN_PROJECT_ID = import.meta.env.VITE_REOWN_PROJECT_ID || "";
 
-function safeStorageGet(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeStorageSet(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Ignore storage failures in restricted mobile browsers/webviews.
-  }
-}
-
-function safeStorageRemove(key: string) {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Ignore storage failures in restricted mobile browsers/webviews.
-  }
-}
-
 export default function App() {
   const gameRef = useRef<PhaserGame | null>(null);
   const [screen, setScreen] = useState<Screen>("menu");
   const [showMatchups, setShowMatchups] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [token, setToken] = useState<string | null>(
-    safeStorageGet(STORAGE_TOKEN)
+    localStorage.getItem(STORAGE_TOKEN)
   );
   const [addressStored, setAddressStored] = useState<string | null>(
-    safeStorageGet(STORAGE_ADDRESS)
+    localStorage.getItem(STORAGE_ADDRESS)
   );
   const [heroes, setHeroes] = useState<HeroType[]>([]);
   const [selectedHero, setSelectedHero] = useState<HeroType>("Shark");
   const [selectedLineup, setSelectedLineupRaw] = useState<HeroType[]>(() => {
     try {
-      const saved = safeStorageGet(STORAGE_LINEUP);
+      const saved = localStorage.getItem(STORAGE_LINEUP);
       if (saved) {
         const parsed = JSON.parse(saved) as HeroType[];
         if (Array.isArray(parsed) && parsed.length === 3 && parsed.every(h => HEROES.includes(h))) {
@@ -116,7 +94,7 @@ export default function App() {
   const setSelectedLineup = useCallback((lineup: HeroType[] | ((prev: HeroType[]) => HeroType[])) => {
     setSelectedLineupRaw(prev => {
       const next = typeof lineup === 'function' ? lineup(prev) : lineup;
-      safeStorageSet(STORAGE_LINEUP, JSON.stringify(next));
+      localStorage.setItem(STORAGE_LINEUP, JSON.stringify(next));
       return next;
     });
   }, []);
@@ -141,7 +119,7 @@ export default function App() {
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    const saved = safeStorageGet(STORAGE_SFX_ENABLED);
+    const saved = localStorage.getItem(STORAGE_SFX_ENABLED);
     return saved == null ? true : saved === "1";
   });
   const [walletBusy, setWalletBusy] = useState(false);
@@ -220,13 +198,20 @@ export default function App() {
   useEffect(() => {
     const handler = () => {
       if (freezeFlow) return;
+      if (isDemoMode) {
+        setShowRewardsModal(false);
+        setRewards(null);
+        setResolution(null);
+        setScreen("pre");
+        return;
+      }
       setShowRewardsModal(true);
     };
     eventBus.on("battle:complete", handler);
     return () => {
       eventBus.off("battle:complete", handler);
     };
-  }, [freezeFlow]);
+  }, [freezeFlow, isDemoMode]);
 
   // Flyout animation: icons fly out of chest one by one, then +N appears on HUD
   useEffect(() => {
@@ -351,7 +336,7 @@ export default function App() {
 
   useEffect(() => {
     setSfxEnabled(soundEnabled);
-    safeStorageSet(STORAGE_SFX_ENABLED, soundEnabled ? "1" : "0");
+    localStorage.setItem(STORAGE_SFX_ENABLED, soundEnabled ? "1" : "0");
   }, [soundEnabled]);
 
   useEffect(() => {
@@ -414,8 +399,8 @@ export default function App() {
   };
 
   const clearAuth = () => {
-    safeStorageRemove(STORAGE_TOKEN);
-    safeStorageRemove(STORAGE_ADDRESS);
+    localStorage.removeItem(STORAGE_TOKEN);
+    localStorage.removeItem(STORAGE_ADDRESS);
     setToken(null);
     setAddressStored(null);
   };
@@ -429,7 +414,7 @@ export default function App() {
       // Restore saved lineup if valid, otherwise build a default one
       let restoredLineup: HeroType[] | null = null;
       try {
-        const saved = safeStorageGet(STORAGE_LINEUP);
+        const saved = localStorage.getItem(STORAGE_LINEUP);
         if (saved) {
           const parsed = JSON.parse(saved) as HeroType[];
           if (Array.isArray(parsed) && parsed.length === 3 && parsed.every(h => HEROES.includes(h))) {
@@ -504,8 +489,8 @@ export default function App() {
       const { message } = await fetchNonce(address);
       const signature = (await walletRequest("personal_sign", [message, address])) as string;
       const authRes = await login(address, signature);
-      safeStorageSet(STORAGE_TOKEN, authRes.token);
-      safeStorageSet(STORAGE_ADDRESS, authRes.address);
+      localStorage.setItem(STORAGE_TOKEN, authRes.token);
+      localStorage.setItem(STORAGE_ADDRESS, authRes.address);
       setToken(authRes.token);
       setAddressStored(authRes.address);
 
@@ -578,18 +563,66 @@ export default function App() {
   };
 
   const onPrepareMatch = useCallback(async () => {
+    if (isDemoMode) return;
     if (!token) return;
     const res = await prepareMatch(token, selectedLineup);
     setPreview(res);
     setMatchesLeft(res.matchesLeft);
     setResetAt(res.resetAt);
-  }, [token, selectedLineup]);
+  }, [isDemoMode, token, selectedLineup]);
 
   useEffect(() => {
-    if (screen === "pre" && token && selectedLineup.length === 3) {
+    if (screen === "pre" && !isDemoMode && token && selectedLineup.length === 3) {
       onPrepareMatch().catch(() => null);
     }
-  }, [screen, token, selectedLineup, onPrepareMatch]);
+  }, [screen, isDemoMode, token, selectedLineup, onPrepareMatch]);
+
+  const randomHero = useCallback((): HeroType => {
+    return HEROES[Math.floor(Math.random() * HEROES.length)] || "Shark";
+  }, []);
+
+  const createDemoPreview = useCallback((lineup: HeroType[]): MatchPreview => {
+    const weather = WEATHER[Math.floor(Math.random() * WEATHER.length)] || WEATHER[0];
+    const opponentLineup = Array.from({ length: 3 }).map((_, index) => ({
+      id: `demo-${index}`,
+      hero: randomHero(),
+      upgrades: { piercingLevel: 0 }
+    }));
+    return {
+      matchId: "demo",
+      weather,
+      playerLineup: lineup,
+      opponentLineup,
+      matchesLeft: 999,
+      resetAt: ""
+    };
+  }, [randomHero]);
+
+  const startDemo = () => {
+    playSfx("buttonClick");
+    const playerLineup = selectedLineup.length === 3 ? selectedLineup : HEROES;
+    setIsDemoMode(true);
+    setResolution(null);
+    setRewards(null);
+    setShowRewardsModal(false);
+    setMatchesLeft(999);
+    setResetAt("");
+    setPreview(createDemoPreview(playerLineup));
+    setScreen("pre");
+  };
+
+  useEffect(() => {
+    if (!isDemoMode) return;
+    if (screen !== "pre") return;
+    if (selectedLineup.length !== 3) return;
+    setPreview((prev) => {
+      if (!prev) return createDemoPreview(selectedLineup);
+      return {
+        ...prev,
+        playerLineup: selectedLineup
+      };
+    });
+  }, [isDemoMode, screen, selectedLineup, createDemoPreview]);
 
   /** Wait for background assets to finish loading (resolves immediately if already done) */
   const waitForAssets = useCallback((): Promise<void> => {
@@ -604,13 +637,67 @@ export default function App() {
   }, [assetsReady]);
 
   const onStartMatch = async () => {
-    if (!token || !preview) return;
+    if (!preview) return;
     playSfx("buttonClick");
     setErrorMsg(null);
     setRewards(null);
     setScreen("loading");
     setLoading(true);
     try {
+      if (isDemoMode) {
+        const playerLineup = (selectedLineup.length === 3 ? selectedLineup : HEROES).slice(0, 3);
+        const opponentLineup = preview.opponentLineup.slice(0, 3);
+        const rounds: Array<{ playerHero: HeroType; opponentHero: HeroType; result: MatchResult }> = [];
+        let playerIndex = 0;
+        let opponentIndex = 0;
+        while (playerIndex < playerLineup.length && opponentIndex < opponentLineup.length) {
+          const playerHero = playerLineup[playerIndex];
+          const opponentHero = opponentLineup[opponentIndex].hero;
+          const win = Math.random() < 0.8;
+          rounds.push({
+            playerHero,
+            opponentHero,
+            result: win ? "win" : "lose"
+          });
+          if (win) {
+            opponentIndex += 1;
+          } else {
+            playerIndex += 1;
+          }
+        }
+        const result: MatchResult = opponentIndex >= opponentLineup.length ? "win" : "lose";
+        const demoResolution: MatchResolution = {
+          matchId: "demo",
+          result,
+          weather: preview.weather,
+          playerLineup,
+          opponentLineup,
+          rounds,
+          chestId: "demo",
+          matchesLeft: 999,
+          resetAt: ""
+        };
+        setResolution(demoResolution);
+        if (result === "win") {
+          setWinStreak((prev) => Math.min(5, prev + 1));
+        } else {
+          setWinStreak(0);
+        }
+        gameRef.current?.startBattle({
+          playerLineup: demoResolution.playerLineup,
+          opponentLineup: demoResolution.opponentLineup,
+          rounds: demoResolution.rounds,
+          result: demoResolution.result,
+          weatherKey: demoResolution.weather.backgroundKey
+        });
+        setScreen("battle");
+        return;
+      }
+
+      if (!token) {
+        setScreen("menu");
+        return;
+      }
       // Resolve match + wait for assets in parallel
       const [res] = await Promise.all([
         resolveMatch(token, preview.matchId, crypto.randomUUID()),
@@ -1053,6 +1140,9 @@ export default function App() {
           <div className="screen center menu-screen">
             <button className="primary big start-button" onClick={onPlay} disabled={loading}>
             </button>
+            <button className="ghost-button" onClick={startDemo} disabled={loading}>
+              Demo
+            </button>
             {errorMsg && <div className="hint error-text">{errorMsg}</div>}
           </div>
         )}
@@ -1170,7 +1260,7 @@ export default function App() {
                     <button
                       className="primary big center-button match-info-start match-start-button"
                       onClick={onStartMatch}
-                      disabled={matchesLeft <= 0 || !preview}
+                      disabled={!isDemoMode && (matchesLeft <= 0 || !preview)}
                     >
                     </button>
                     {errorMsg && <div className="hint error-text">{errorMsg}</div>}
