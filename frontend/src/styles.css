@@ -1599,8 +1599,16 @@ body {
     min-height: 72px;
     padding: 8px 10px;
     gap: 10px;
-    flex-wrap: wrap;
-    justify-content: space-between;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .top-resource-bar::-webkit-scrollbar {
+    display: none;
   }
 
   .player-tag {
@@ -1630,8 +1638,8 @@ body {
   }
 
   .resource-icon {
-    width: 24px;
-    height: 24px;
+    width: 30px;
+    height: 30px;
   }
 
   .streak-icons {
@@ -1640,23 +1648,24 @@ body {
   }
 
   .streak-icon {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
   }
 
   .resource-actions {
     order: 4;
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    width: auto;
+    overflow: visible;
+    padding-bottom: 0;
     gap: 6px;
-    -webkit-overflow-scrolling: touch;
+    flex: 0 0 auto;
   }
 
   .resource-actions .ghost-button {
     flex: 0 0 auto;
     padding: 6px 10px;
     font-size: 12px;
+    white-space: nowrap;
   }
 
   .screen {
@@ -1765,7 +1774,7 @@ body {
 
 @media (max-width: 480px) {
   .top-resource-bar {
-    min-height: 86px;
+    min-height: 72px;
     padding: 6px 8px;
   }
 
@@ -1798,13 +1807,8 @@ body {
   }
 
   .resource-icon {
-    width: 20px;
-    height: 20px;
-  }
-
-  .streak-icon {
-    width: 14px;
-    height: 14px;
+    width: 26px;
+    height: 26px;
   }
 
   .screen {
