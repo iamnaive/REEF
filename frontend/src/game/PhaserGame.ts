@@ -4,14 +4,26 @@ import { MenuScene } from "./scenes/MenuScene";
 import { BattleScene } from "./scenes/BattleScene";
 import { BackgroundLoaderScene } from "./scenes/BackgroundLoaderScene";
 
+function shouldUseCanvasRenderer() {
+  try {
+    const hasCoarsePointer =
+      typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    const hasLowCoreCount = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency <= 4;
+    return hasCoarsePointer || hasLowCoreCount;
+  } catch {
+    return true;
+  }
+}
+
 export class PhaserGame {
   private game: Phaser.Game;
 
   constructor(parentId: string) {
     const width = window.innerWidth;
     const height = window.innerHeight;
+    const renderType = shouldUseCanvasRenderer() ? Phaser.CANVAS : Phaser.AUTO;
     this.game = new Phaser.Game({
-      type: Phaser.AUTO,
+      type: renderType,
       backgroundColor: "#0a1026",
       width,
       height,
