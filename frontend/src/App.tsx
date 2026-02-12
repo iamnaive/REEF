@@ -95,6 +95,17 @@ function isCoarsePointerDevice(): boolean {
   }
 }
 
+function createIdempotencyKey(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // Ignore and fallback.
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 export default function App() {
   const gameRef = useRef<PhaserGame | null>(null);
   const [screen, setScreen] = useState<Screen>("menu");
@@ -625,10 +636,15 @@ export default function App() {
   }, [screen, token, selectedLineup, onPrepareMatch]);
 
   /** Wait for background assets to finish loading (resolves immediately if already done) */
-  const waitForAssets = useCallback((): Promise<void> => {
+  const waitForAssets = useCallback((timeoutMs = 2500): Promise<void> => {
     if (assetsReady) return Promise.resolve();
     return new Promise((resolve) => {
+      const timer = window.setTimeout(() => {
+        eventBus.off("phaser:assets-ready", check);
+        resolve();
+      }, timeoutMs);
       const check = () => {
+        window.clearTimeout(timer);
         eventBus.off("phaser:assets-ready", check);
         resolve();
       };
@@ -646,7 +662,7 @@ export default function App() {
     try {
       // Resolve match + wait for assets in parallel
       const [res] = await Promise.all([
-        resolveMatch(token, preview.matchId, crypto.randomUUID()),
+        resolveMatch(token, preview.matchId, createIdempotencyKey()),
         waitForAssets()
       ]);
       setResolution(res);
@@ -678,7 +694,7 @@ export default function App() {
       return;
     }
     playSfx("chestOpen");
-    const idemKey = crypto.randomUUID();
+    const idemKey = createIdempotencyKey();
     const res = await openChest(token, resolution.chestId, idemKey);
     setRewards(res.rewards);
     addResources({
