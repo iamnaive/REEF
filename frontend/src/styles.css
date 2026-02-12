@@ -1720,15 +1720,15 @@ body {
   }
 
   .lineup-slot {
-    width: 44px;
-    height: 44px;
+    width: 88px;
+    height: 88px;
     border-radius: 9px;
   }
 
   .hero-picker.icons .hero-icon,
   .hero-icon {
-    width: 44px;
-    height: 44px;
+    width: 88px;
+    height: 88px;
     border-radius: 9px;
   }
 
@@ -1888,15 +1888,15 @@ body {
   }
 
   .lineup-slot {
-    width: 40px;
-    height: 40px;
+    width: 80px;
+    height: 80px;
     border-radius: 10px;
   }
 
   .hero-picker.icons .hero-icon,
   .hero-icon {
-    width: 40px;
-    height: 40px;
+    width: 80px;
+    height: 80px;
     border-radius: 8px;
   }
 
@@ -2022,8 +2022,8 @@ body {
   .lineup-slot,
   .hero-picker.icons .hero-icon,
   .hero-icon {
-    width: 36px;
-    height: 36px;
+    width: 72px;
+    height: 72px;
     border-radius: 7px;
   }
 
@@ -2102,5 +2102,86 @@ body {
     max-width: 136px;
     height: 34px;
     margin-top: -1px;
+  }
+}
+
+/* Touch devices in landscape can have wide CSS width (>768), so enforce mobile prematch sizing by input type. */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .lineup-slot,
+  .hero-picker.icons .hero-icon,
+  .hero-icon {
+    width: 96px !important;
+    height: 96px !important;
+  }
+
+  .lineup-slot .slot-index {
+    font-size: 16px !important;
+    right: 10px !important;
+    bottom: 6px !important;
+  }
+
+  .prematch-card-body > * {
+    min-width: 0;
+  }
+
+  .match-info-row > * {
+    min-width: 0;
+  }
+
+  .match-info-weather,
+  .match-info-row {
+    width: calc(100% - 8px);
+    margin: 0 auto;
+  }
+
+  .match-info-weather {
+    padding: 4px 6px !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+  }
+
+  .match-info-weather .weather-content {
+    gap: 8px !important;
+    align-items: flex-start;
+  }
+
+  .match-info-weather .weather-content > div {
+    min-width: 0;
+  }
+
+  .match-info-weather .value {
+    font-size: 10px !important;
+    line-height: 1.08 !important;
+    word-break: break-word;
+  }
+
+  .match-info-weather .hint {
+    font-size: 8px !important;
+    line-height: 1.05 !important;
+    word-break: break-word;
+  }
+
+  .match-info-matches,
+  .match-info-bonuses {
+    padding: 4px 6px !important;
+    border-radius: 7px !important;
+    overflow: hidden;
+  }
+
+  .match-info-bonuses ul {
+    margin-top: 1px;
+    padding-left: 10px;
+    gap: 1px;
+  }
+
+  .match-info-bonuses ul li {
+    font-size: 8px !important;
+    line-height: 1.1 !important;
+    word-break: break-word;
+  }
+
+  .match-start-button {
+    max-width: 136px !important;
+    height: 34px !important;
   }
 }
