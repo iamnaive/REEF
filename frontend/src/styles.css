@@ -550,7 +550,7 @@ body {
 }
 
 .prematch-card {
-  background: url("/assets/ui/Block%20sq.avif") center/100% 100% no-repeat;
+  background: #c2e4ec url("/assets/ui/Block%20sq.avif") center / 100% 100% no-repeat;
   border-radius: 18px;
   border: none;
   padding: 64px 44px 18px;
@@ -561,6 +561,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  overflow: hidden;
 }
 
 .match-info-row {
@@ -1750,7 +1751,8 @@ body {
     height: 100%;
     padding: 30px 10px 8px;
     border-radius: 10px;
-    overflow: visible;
+    background-size: cover;
+    overflow: hidden;
   }
 
   .match-info-row {
@@ -1914,6 +1916,8 @@ body {
 
   .prematch-card {
     padding: 24px 8px 8px;
+    background-size: cover;
+    overflow: hidden;
   }
 
   .match-start-button {
@@ -2048,6 +2052,8 @@ body {
   .prematch-card {
     padding: 20px 8px 6px;
     border-radius: 8px;
+    background-size: cover;
+    overflow: hidden;
   }
 
   .prematch-card-body {
