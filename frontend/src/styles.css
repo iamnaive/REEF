@@ -2107,17 +2107,62 @@ body {
 
 /* Touch devices in landscape can have wide CSS width (>768), so enforce mobile prematch sizing by input type. */
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .prematch-shell {
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr) !important;
+    gap: 6px !important;
+  }
+
+  .prematch-left {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-items: stretch;
+    gap: 6px !important;
+    min-width: 0;
+  }
+
+  .hero-showcase {
+    width: 58px !important;
+    height: 58px !important;
+    align-self: start;
+  }
+
+  .lineup-section {
+    min-width: 0;
+    align-items: stretch !important;
+    gap: 3px !important;
+  }
+
+  .lineup-section .label {
+    font-size: 9px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    text-align: left;
+  }
+
+  .lineup-slots {
+    justify-content: flex-start !important;
+    gap: 4px !important;
+    margin: 0 0 2px !important;
+  }
+
+  .hero-picker.icons {
+    justify-content: flex-start !important;
+    gap: 4px !important;
+  }
+
   .lineup-slot,
   .hero-picker.icons .hero-icon,
   .hero-icon {
-    width: 96px !important;
-    height: 96px !important;
+    width: 58px !important;
+    height: 58px !important;
+    border-radius: 8px !important;
   }
 
   .lineup-slot .slot-index {
-    font-size: 16px !important;
-    right: 10px !important;
-    bottom: 6px !important;
+    font-size: 11px !important;
+    right: 6px !important;
+    bottom: 3px !important;
   }
 
   .prematch-card-body > * {
@@ -2181,7 +2226,7 @@ body {
   }
 
   .match-start-button {
-    max-width: 136px !important;
-    height: 34px !important;
+    max-width: 132px !important;
+    height: 32px !important;
   }
 }
