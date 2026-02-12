@@ -63,21 +63,45 @@ const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || "";
 const ENTRY_FEE_MON = import.meta.env.VITE_ENTRY_FEE_MON || "";
 const REOWN_PROJECT_ID = import.meta.env.VITE_REOWN_PROJECT_ID || "";
 
+function safeStorageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures in restricted mobile browsers/webviews.
+  }
+}
+
+function safeStorageRemove(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures in restricted mobile browsers/webviews.
+  }
+}
+
 export default function App() {
   const gameRef = useRef<PhaserGame | null>(null);
   const [screen, setScreen] = useState<Screen>("menu");
   const [showMatchups, setShowMatchups] = useState(false);
   const [token, setToken] = useState<string | null>(
-    localStorage.getItem(STORAGE_TOKEN)
+    safeStorageGet(STORAGE_TOKEN)
   );
   const [addressStored, setAddressStored] = useState<string | null>(
-    localStorage.getItem(STORAGE_ADDRESS)
+    safeStorageGet(STORAGE_ADDRESS)
   );
   const [heroes, setHeroes] = useState<HeroType[]>([]);
   const [selectedHero, setSelectedHero] = useState<HeroType>("Shark");
   const [selectedLineup, setSelectedLineupRaw] = useState<HeroType[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_LINEUP);
+      const saved = safeStorageGet(STORAGE_LINEUP);
       if (saved) {
         const parsed = JSON.parse(saved) as HeroType[];
         if (Array.isArray(parsed) && parsed.length === 3 && parsed.every(h => HEROES.includes(h))) {
@@ -92,7 +116,7 @@ export default function App() {
   const setSelectedLineup = useCallback((lineup: HeroType[] | ((prev: HeroType[]) => HeroType[])) => {
     setSelectedLineupRaw(prev => {
       const next = typeof lineup === 'function' ? lineup(prev) : lineup;
-      localStorage.setItem(STORAGE_LINEUP, JSON.stringify(next));
+      safeStorageSet(STORAGE_LINEUP, JSON.stringify(next));
       return next;
     });
   }, []);
@@ -117,7 +141,7 @@ export default function App() {
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_SFX_ENABLED);
+    const saved = safeStorageGet(STORAGE_SFX_ENABLED);
     return saved == null ? true : saved === "1";
   });
   const [walletBusy, setWalletBusy] = useState(false);
@@ -327,7 +351,7 @@ export default function App() {
 
   useEffect(() => {
     setSfxEnabled(soundEnabled);
-    localStorage.setItem(STORAGE_SFX_ENABLED, soundEnabled ? "1" : "0");
+    safeStorageSet(STORAGE_SFX_ENABLED, soundEnabled ? "1" : "0");
   }, [soundEnabled]);
 
   useEffect(() => {
@@ -390,8 +414,8 @@ export default function App() {
   };
 
   const clearAuth = () => {
-    localStorage.removeItem(STORAGE_TOKEN);
-    localStorage.removeItem(STORAGE_ADDRESS);
+    safeStorageRemove(STORAGE_TOKEN);
+    safeStorageRemove(STORAGE_ADDRESS);
     setToken(null);
     setAddressStored(null);
   };
@@ -405,7 +429,7 @@ export default function App() {
       // Restore saved lineup if valid, otherwise build a default one
       let restoredLineup: HeroType[] | null = null;
       try {
-        const saved = localStorage.getItem(STORAGE_LINEUP);
+        const saved = safeStorageGet(STORAGE_LINEUP);
         if (saved) {
           const parsed = JSON.parse(saved) as HeroType[];
           if (Array.isArray(parsed) && parsed.length === 3 && parsed.every(h => HEROES.includes(h))) {
@@ -480,8 +504,8 @@ export default function App() {
       const { message } = await fetchNonce(address);
       const signature = (await walletRequest("personal_sign", [message, address])) as string;
       const authRes = await login(address, signature);
-      localStorage.setItem(STORAGE_TOKEN, authRes.token);
-      localStorage.setItem(STORAGE_ADDRESS, authRes.address);
+      safeStorageSet(STORAGE_TOKEN, authRes.token);
+      safeStorageSet(STORAGE_ADDRESS, authRes.address);
       setToken(authRes.token);
       setAddressStored(authRes.address);
 
