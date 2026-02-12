@@ -1596,46 +1596,37 @@ body {
 /* ── Mobile/Tablet responsiveness ── */
 @media (max-width: 768px) {
   .top-resource-bar {
-    min-height: 52px;
-    padding: 4px 8px;
-    gap: 6px;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    align-items: center;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  .top-resource-bar::-webkit-scrollbar {
-    display: none;
+    min-height: 72px;
+    padding: 8px 10px;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: space-between;
   }
 
   .player-tag {
-    font-size: 11px;
-    padding: 2px 8px;
-    gap: 4px;
+    order: 1;
+    font-size: 12px;
   }
 
   .mon-pool-counter {
-    min-width: 88px;
-    padding: 3px 6px;
+    order: 0;
+    min-width: 104px;
+    padding: 5px 8px;
     gap: 1px;
-    border-radius: 10px;
   }
 
   .mon-pool-label {
-    font-size: 7px;
+    font-size: 8px;
   }
 
   .mon-pool-value {
-    font-size: 9px;
+    font-size: 10px;
   }
 
   .resource-group {
-    gap: 8px;
-    font-size: 12px;
+    order: 2;
+    gap: 10px;
+    font-size: 14px;
   }
 
   .resource-icon {
@@ -1644,6 +1635,7 @@ body {
   }
 
   .streak-icons {
+    order: 3;
     gap: 4px;
   }
 
@@ -1653,22 +1645,22 @@ body {
   }
 
   .resource-actions {
-    width: auto;
-    overflow: visible;
-    padding-bottom: 0;
-    gap: 4px;
-    flex: 0 0 auto;
-    display: inline-flex;
+    order: 4;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    gap: 6px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .resource-actions .ghost-button {
-    padding: 4px 8px;
-    font-size: 11px;
-    min-height: 28px;
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    font-size: 12px;
   }
 
   .screen {
-    padding: 76px 10px 12px;
+    padding: 96px 10px 12px;
     justify-content: flex-start;
     overflow-y: auto;
   }
@@ -1773,37 +1765,36 @@ body {
 
 @media (max-width: 480px) {
   .top-resource-bar {
-    min-height: 44px;
-    padding: 3px 6px;
-    gap: 4px;
+    min-height: 86px;
+    padding: 6px 8px;
   }
 
   .mon-pool-counter {
-    min-width: 78px;
-    padding: 2px 5px;
+    min-width: 92px;
+    padding: 4px 6px;
     gap: 1px;
   }
 
   .mon-pool-label {
-    font-size: 6px;
+    font-size: 7px;
   }
 
   .mon-pool-value {
-    font-size: 8px;
+    font-size: 9px;
   }
 
   .player-tag {
-    padding: 1px 6px;
-    font-size: 10px;
+    padding: 2px 8px;
+    font-size: 11px;
   }
 
   .resource-group {
-    gap: 6px;
+    gap: 8px;
   }
 
   .resource-item {
-    gap: 3px;
-    font-size: 11px;
+    gap: 4px;
+    font-size: 13px;
   }
 
   .resource-icon {
@@ -1816,14 +1807,8 @@ body {
     height: 14px;
   }
 
-  .resource-actions .ghost-button {
-    padding: 3px 7px;
-    font-size: 10px;
-    min-height: 24px;
-  }
-
   .screen {
-    padding-top: 64px;
+    padding-top: 104px;
   }
 
   .lineup-slot {
@@ -1869,95 +1854,5 @@ body {
 
   .close-img-icon {
     width: 104px;
-  }
-}
-
-/* Mobile devices can report wide CSS widths in landscape; force compact single-row HUD by input type. */
-@media (hover: none) and (pointer: coarse) {
-  .top-resource-bar {
-    min-height: 46px !important;
-    padding: 3px 6px !important;
-    gap: 4px !important;
-    flex-wrap: nowrap !important;
-    justify-content: flex-start !important;
-    align-items: center !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  .top-resource-bar::-webkit-scrollbar {
-    display: none;
-  }
-
-  .mon-pool-counter {
-    min-width: 78px !important;
-    padding: 2px 5px !important;
-    gap: 1px !important;
-  }
-
-  .mon-pool-label {
-    font-size: 6px !important;
-  }
-
-  .mon-pool-value {
-    font-size: 8px !important;
-  }
-
-  .player-tag {
-    padding: 1px 6px !important;
-    font-size: 10px !important;
-    gap: 3px !important;
-  }
-
-  .player-tag-icon {
-    font-size: 12px !important;
-  }
-
-  .resource-group {
-    gap: 6px !important;
-  }
-
-  .resource-item {
-    gap: 3px !important;
-    font-size: 11px !important;
-    white-space: nowrap;
-  }
-
-  .resource-icon {
-    width: 20px !important;
-    height: 20px !important;
-  }
-
-  .streak-icons {
-    gap: 3px !important;
-  }
-
-  .streak-icon {
-    width: 14px !important;
-    height: 14px !important;
-  }
-
-  .resource-actions {
-    width: auto !important;
-    display: inline-flex !important;
-    flex-wrap: nowrap !important;
-    gap: 4px !important;
-    overflow: visible !important;
-    padding-bottom: 0 !important;
-    flex: 0 0 auto;
-  }
-
-  .resource-actions .ghost-button {
-    padding: 3px 7px !important;
-    min-height: 24px !important;
-    font-size: 10px !important;
-    line-height: 1 !important;
-    white-space: nowrap !important;
-  }
-
-  .screen {
-    padding-top: 64px !important;
   }
 }

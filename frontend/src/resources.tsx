@@ -3,22 +3,6 @@ import { ResourceTotals } from "@shared/types";
 
 const STORAGE_KEY = "sea_battle_resources";
 
-function safeStorageGet(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeStorageSet(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Ignore storage write failures in restricted mobile browsers/webviews.
-  }
-}
-
 type ResourceContextValue = {
   resources: ResourceTotals;
   setResources: (value: ResourceTotals) => void;
@@ -29,7 +13,7 @@ const ResourceContext = createContext<ResourceContextValue | null>(null);
 
 export function ResourceProvider({ children }: { children: React.ReactNode }) {
   const [resources, setResourcesState] = useState<ResourceTotals>(() => {
-    const raw = safeStorageGet(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { coins: 0, pearls: 0, shards: 0 };
     try {
       return JSON.parse(raw) as ResourceTotals;
@@ -51,7 +35,7 @@ export function ResourceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    safeStorageSet(STORAGE_KEY, JSON.stringify(resources));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(resources));
   }, [resources]);
 
   const value = useMemo(

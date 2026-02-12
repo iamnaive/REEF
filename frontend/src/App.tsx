@@ -63,64 +63,21 @@ const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || "";
 const ENTRY_FEE_MON = import.meta.env.VITE_ENTRY_FEE_MON || "";
 const REOWN_PROJECT_ID = import.meta.env.VITE_REOWN_PROJECT_ID || "";
 
-function safeStorageGet(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeStorageSet(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Ignore storage errors in restricted mobile browsers/webviews.
-  }
-}
-
-function safeStorageRemove(key: string) {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Ignore storage errors in restricted mobile browsers/webviews.
-  }
-}
-
-function isCoarsePointerDevice(): boolean {
-  try {
-    return typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-  } catch {
-    return false;
-  }
-}
-
-function createIdempotencyKey(): string {
-  try {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      return crypto.randomUUID();
-    }
-  } catch {
-    // Ignore and fallback.
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-}
-
 export default function App() {
   const gameRef = useRef<PhaserGame | null>(null);
   const [screen, setScreen] = useState<Screen>("menu");
   const [showMatchups, setShowMatchups] = useState(false);
   const [token, setToken] = useState<string | null>(
-    safeStorageGet(STORAGE_TOKEN)
+    localStorage.getItem(STORAGE_TOKEN)
   );
   const [addressStored, setAddressStored] = useState<string | null>(
-    safeStorageGet(STORAGE_ADDRESS)
+    localStorage.getItem(STORAGE_ADDRESS)
   );
   const [heroes, setHeroes] = useState<HeroType[]>([]);
   const [selectedHero, setSelectedHero] = useState<HeroType>("Shark");
   const [selectedLineup, setSelectedLineupRaw] = useState<HeroType[]>(() => {
     try {
-      const saved = safeStorageGet(STORAGE_LINEUP);
+      const saved = localStorage.getItem(STORAGE_LINEUP);
       if (saved) {
         const parsed = JSON.parse(saved) as HeroType[];
         if (Array.isArray(parsed) && parsed.length === 3 && parsed.every(h => HEROES.includes(h))) {
@@ -135,7 +92,7 @@ export default function App() {
   const setSelectedLineup = useCallback((lineup: HeroType[] | ((prev: HeroType[]) => HeroType[])) => {
     setSelectedLineupRaw(prev => {
       const next = typeof lineup === 'function' ? lineup(prev) : lineup;
-      safeStorageSet(STORAGE_LINEUP, JSON.stringify(next));
+      localStorage.setItem(STORAGE_LINEUP, JSON.stringify(next));
       return next;
     });
   }, []);
@@ -159,7 +116,10 @@ export default function App() {
   const [resetTimer, setResetTimer] = useState<string>("");
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem(STORAGE_SFX_ENABLED);
+    return saved == null ? true : saved === "1";
+  });
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [showWalletGate, setShowWalletGate] = useState(false);
@@ -224,15 +184,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    let devFreeze = false;
-    let devScreen: string | null = null;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      devFreeze = params.get("freeze") === "1";
-      devScreen = params.get("screen");
-    } catch {
-      // Ignore URL parsing issues in restricted webviews.
-    }
+    const params = new URLSearchParams(window.location.search);
+    const devFreeze = params.get("freeze") === "1";
+    const devScreen = params.get("screen");
     if (devFreeze) setFreezeFlow(true);
     if (devScreen === "menu" || devScreen === "pre" || devScreen === "battle") {
       setScreen(devScreen);
@@ -373,14 +327,8 @@ export default function App() {
 
   useEffect(() => {
     setSfxEnabled(soundEnabled);
-    safeStorageSet(STORAGE_SFX_ENABLED, soundEnabled ? "1" : "0");
+    localStorage.setItem(STORAGE_SFX_ENABLED, soundEnabled ? "1" : "0");
   }, [soundEnabled]);
-
-  useEffect(() => {
-    // Always default to music ON on page entry.
-    setSoundEnabled(true);
-    safeStorageSet(STORAGE_SFX_ENABLED, "1");
-  }, []);
 
   useEffect(() => {
     if (screen === "battle") {
@@ -392,22 +340,6 @@ export default function App() {
     } else {
       fadeOutMenuLoop(0);
     }
-  }, [screen, soundEnabled]);
-
-  useEffect(() => {
-    const unlockAudio = () => {
-      if (soundEnabled && screen !== "battle") {
-        playMenuLoop();
-      }
-      window.removeEventListener("pointerdown", unlockAudio);
-      window.removeEventListener("touchstart", unlockAudio);
-    };
-    window.addEventListener("pointerdown", unlockAudio, { passive: true });
-    window.addEventListener("touchstart", unlockAudio, { passive: true });
-    return () => {
-      window.removeEventListener("pointerdown", unlockAudio);
-      window.removeEventListener("touchstart", unlockAudio);
-    };
   }, [screen, soundEnabled]);
 
   const walletRequest = async (method: string, params?: unknown[]) => {
@@ -458,8 +390,8 @@ export default function App() {
   };
 
   const clearAuth = () => {
-    safeStorageRemove(STORAGE_TOKEN);
-    safeStorageRemove(STORAGE_ADDRESS);
+    localStorage.removeItem(STORAGE_TOKEN);
+    localStorage.removeItem(STORAGE_ADDRESS);
     setToken(null);
     setAddressStored(null);
   };
@@ -473,7 +405,7 @@ export default function App() {
       // Restore saved lineup if valid, otherwise build a default one
       let restoredLineup: HeroType[] | null = null;
       try {
-        const saved = safeStorageGet(STORAGE_LINEUP);
+        const saved = localStorage.getItem(STORAGE_LINEUP);
         if (saved) {
           const parsed = JSON.parse(saved) as HeroType[];
           if (Array.isArray(parsed) && parsed.length === 3 && parsed.every(h => HEROES.includes(h))) {
@@ -548,8 +480,8 @@ export default function App() {
       const { message } = await fetchNonce(address);
       const signature = (await walletRequest("personal_sign", [message, address])) as string;
       const authRes = await login(address, signature);
-      safeStorageSet(STORAGE_TOKEN, authRes.token);
-      safeStorageSet(STORAGE_ADDRESS, authRes.address);
+      localStorage.setItem(STORAGE_TOKEN, authRes.token);
+      localStorage.setItem(STORAGE_ADDRESS, authRes.address);
       setToken(authRes.token);
       setAddressStored(authRes.address);
 
@@ -636,15 +568,10 @@ export default function App() {
   }, [screen, token, selectedLineup, onPrepareMatch]);
 
   /** Wait for background assets to finish loading (resolves immediately if already done) */
-  const waitForAssets = useCallback((timeoutMs = 2500): Promise<void> => {
+  const waitForAssets = useCallback((): Promise<void> => {
     if (assetsReady) return Promise.resolve();
     return new Promise((resolve) => {
-      const timer = window.setTimeout(() => {
-        eventBus.off("phaser:assets-ready", check);
-        resolve();
-      }, timeoutMs);
       const check = () => {
-        window.clearTimeout(timer);
         eventBus.off("phaser:assets-ready", check);
         resolve();
       };
@@ -662,7 +589,7 @@ export default function App() {
     try {
       // Resolve match + wait for assets in parallel
       const [res] = await Promise.all([
-        resolveMatch(token, preview.matchId, createIdempotencyKey()),
+        resolveMatch(token, preview.matchId, crypto.randomUUID()),
         waitForAssets()
       ]);
       setResolution(res);
@@ -694,7 +621,7 @@ export default function App() {
       return;
     }
     playSfx("chestOpen");
-    const idemKey = createIdempotencyKey();
+    const idemKey = crypto.randomUUID();
     const res = await openChest(token, resolution.chestId, idemKey);
     setRewards(res.rewards);
     addResources({
@@ -934,7 +861,7 @@ export default function App() {
       const width = window.innerWidth;
       const height = window.innerHeight;
       const isPortrait = height > width;
-      const isCoarsePointer = isCoarsePointerDevice();
+      const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
       const isMobileWidth = Math.min(width, height) <= 900;
       setIsMobilePortrait(isPortrait && isCoarsePointer && isMobileWidth);
     };
