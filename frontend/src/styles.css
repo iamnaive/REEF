@@ -550,7 +550,7 @@ body {
 }
 
 .prematch-card {
-  background: #c2e4ec url("/assets/ui/Block%20sq.avif") center / 100% 100% no-repeat;
+  background: url("/assets/ui/Block%20sq.avif") center / 100% 100% no-repeat;
   border-radius: 18px;
   border: none;
   padding: 64px 44px 18px;
@@ -1701,9 +1701,6 @@ body {
     padding: 8px;
     border-radius: 10px;
     overflow: visible;
-    background: transparent;
-    border: none;
-    box-shadow: none;
   }
 
   .prematch-shell {
@@ -1713,7 +1710,6 @@ body {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
     gap: 8px;
     align-items: stretch;
-    padding-left: 10px;
   }
 
   .prematch-left {
@@ -1726,12 +1722,13 @@ body {
   .hero-showcase {
     width: clamp(64px, 13vw, 92px);
     height: clamp(64px, 13vw, 92px);
-    margin: 0 auto 0;
+    margin: 100px auto 0;
   }
 
   .lineup-section {
     width: 100%;
     gap: 4px;
+    padding-left: 100px;
   }
 
   .lineup-slots {
@@ -1753,14 +1750,13 @@ body {
   }
 
   .prematch-card {
-    width: calc(100% - 20px);
+    width: 100%;
     min-height: 0;
     height: 100%;
     padding: 30px 10px 8px;
     border-radius: 10px;
     background-size: cover;
     overflow: hidden;
-    margin-left: 20px;
   }
 
   .match-info-row {
@@ -1771,8 +1767,7 @@ body {
   .match-start-button {
     max-width: 168px;
     height: 42px;
-    margin-top: -4px;
-    margin-bottom: 6px;
+    margin-top: -30px;
   }
 
   .prematch-card .label {
@@ -1804,7 +1799,8 @@ body {
   .match-info-weather {
     padding: 6px 8px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.22);
+    background: transparent;
+    margin-left: 50px;
   }
 
   .match-info-weather .weather-content {
