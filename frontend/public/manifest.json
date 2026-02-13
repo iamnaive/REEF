@@ -1,0 +1,18 @@
+{
+  "name": "Sea Battle",
+  "short_name": "SeaBattle",
+  "description": "Sea Battle – PvP strategy game",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05070f",
+  "theme_color": "#05070f",
+  "icons": [
+    {
+      "src": "/assets/ui/Block%20sq.avif",
+      "sizes": "512x512",
+      "type": "image/avif",
+      "purpose": "any"
+    }
+  ]
+}

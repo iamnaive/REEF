@@ -16,6 +16,41 @@ setAppHeight();
 window.addEventListener("resize", setAppHeight);
 window.addEventListener("orientationchange", () => setTimeout(setAppHeight, 150));
 
+/* ── Mobile fullscreen on first interaction ──
+ * On mobile browsers we request native fullscreen so the address bar,
+ * tabs, and other browser chrome are hidden. This only works inside a
+ * user-gesture callback, so we listen for the first touch/click.
+ * In standalone (PWA / home-screen) mode this is unnecessary.
+ */
+function isMobile(): boolean {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+}
+
+function isStandalone(): boolean {
+  return window.matchMedia("(display-mode: standalone)").matches
+    || (navigator as unknown as { standalone?: boolean }).standalone === true;
+}
+
+function tryFullscreen(): void {
+  if (!isMobile() || isStandalone()) return;
+  const el = document.documentElement as HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void>;
+    msRequestFullscreen?: () => void;
+  };
+  const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (rfs) {
+    rfs.call(el).catch(() => {/* browser denied — not critical */});
+  }
+}
+
+if (isMobile() && !isStandalone()) {
+  const once = () => {
+    tryFullscreen();
+    document.removeEventListener("pointerdown", once);
+  };
+  document.addEventListener("pointerdown", once, { passive: true });
+}
+
 function renderFatal(message: string) {
   const root = document.getElementById("root");
   if (!root) return;
