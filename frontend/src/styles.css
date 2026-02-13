@@ -355,6 +355,12 @@ body {
   animation: hero-float 2.6s ease-in-out infinite;
 }
 
+/* Prematch: make Whale hero 28% smaller than other heroes */
+.hero-showcase img[src*="/whale/"] {
+  max-width: 72%;
+  max-height: 72%;
+}
+
 .lineup-section {
   display: flex;
   flex-direction: column;
