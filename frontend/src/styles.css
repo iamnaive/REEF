@@ -2549,6 +2549,17 @@ body {
     overflow: visible !important;
   }
 
+  .lineup-slot img,
+  .hero-picker.icons .hero-icon img {
+    transform: translateX(15px) scale(1.3) !important;
+    transform-origin: center;
+  }
+
+  .hero-showcase img {
+    transform: translateX(15px) scale(1.3) !important;
+    transform-origin: center;
+  }
+
   .lineup-section {
     overflow: visible !important;
     padding-top: 3px !important;
@@ -2708,6 +2719,17 @@ body {
   html.ios-safari-browser .hero-picker.icons {
     max-width: 100% !important;
     overflow: visible !important;
+  }
+
+  html.ios-safari-browser .lineup-slot img,
+  html.ios-safari-browser .hero-picker.icons .hero-icon img {
+    transform: translateX(15px) scale(1.3) !important;
+    transform-origin: center;
+  }
+
+  html.ios-safari-browser .hero-showcase img {
+    transform: translateX(15px) scale(1.3) !important;
+    transform-origin: center;
   }
 
   html.ios-safari-browser .lineup-section {
