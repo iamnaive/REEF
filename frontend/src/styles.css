@@ -1730,6 +1730,7 @@ body {
     width: 100%;
     gap: 4px;
     padding-left: 100px;
+    transform: translateX(-200px);
   }
 
   .lineup-slots {
@@ -1780,7 +1781,7 @@ body {
   .match-start-button {
     max-width: 168px;
     height: 42px;
-    margin-top: 60px;
+    margin-top: 30px;
   }
 
   .prematch-card .label {
@@ -2191,6 +2192,7 @@ body {
     min-width: 0;
     align-items: stretch !important;
     gap: 3px !important;
+    transform: translateX(-200px) !important;
   }
 
   .lineup-section .label {
