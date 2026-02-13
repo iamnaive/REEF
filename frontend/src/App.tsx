@@ -593,7 +593,7 @@ export default function App() {
       weather,
       playerLineup: lineup,
       opponentLineup,
-      matchesLeft: 999,
+      matchesLeft: 5,
       resetAt: ""
     };
   }, [randomHero]);
@@ -605,7 +605,7 @@ export default function App() {
     setResolution(null);
     setRewards(null);
     setShowRewardsModal(false);
-    setMatchesLeft(999);
+    setMatchesLeft(5);
     setResetAt("");
     setPreview(createDemoPreview(playerLineup));
     setScreen("pre");
@@ -674,7 +674,7 @@ export default function App() {
           opponentLineup,
           rounds,
           chestId: "demo",
-          matchesLeft: 999,
+          matchesLeft: 5,
           resetAt: ""
         };
         setResolution(demoResolution);
