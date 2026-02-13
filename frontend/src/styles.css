@@ -1770,7 +1770,7 @@ body {
     height: 100%;
     padding: 30px 10px 8px;
     border-radius: 10px;
-    background-size: cover;
+    background-size: 100% 100%;
     overflow: hidden;
   }
 
@@ -1782,7 +1782,7 @@ body {
   .match-start-button {
     max-width: 168px;
     height: 42px;
-    margin-top: 10px;
+    margin-top: 0;
   }
 
   .prematch-card .label {
@@ -1955,7 +1955,7 @@ body {
 
   .prematch-card {
     padding: 24px 8px 8px;
-    background-size: cover;
+    background-size: 100% 100%;
     overflow: hidden;
   }
 
@@ -2103,7 +2103,7 @@ body {
   .prematch-card {
     padding: 20px 8px 6px;
     border-radius: 8px;
-    background-size: cover;
+    background-size: 100% 100%;
     overflow: hidden;
   }
 
@@ -2170,7 +2170,7 @@ body {
   .match-start-button {
     max-width: 136px;
     height: 34px;
-    margin-top: -1px;
+    margin-top: -11px;
   }
 }
 
@@ -2315,5 +2315,6 @@ body {
   .match-start-button {
     max-width: 132px !important;
     height: 32px !important;
+    margin-top: -11px !important;
   }
 }
