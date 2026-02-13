@@ -341,6 +341,17 @@ body {
   gap: 4px;
 }
 
+/* Desktop: align slot block bottom edge with Block sq bottom edge */
+@media (min-width: 769px) {
+  .prematch-shell {
+    align-items: flex-end;
+  }
+
+  .lineup-section {
+    transform: translateY(-14px);
+  }
+}
+
 .hero-showcase {
   width: clamp(150px, 16vw, 220px);
   height: clamp(150px, 16vw, 220px);
