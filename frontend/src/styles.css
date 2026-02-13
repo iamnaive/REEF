@@ -1701,6 +1701,9 @@ body {
     padding: 8px;
     border-radius: 10px;
     overflow: visible;
+    background: transparent;
+    border: none;
+    box-shadow: none;
   }
 
   .prematch-shell {
@@ -1710,17 +1713,20 @@ body {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
     gap: 8px;
     align-items: stretch;
+    padding-left: 10px;
   }
 
   .prematch-left {
     width: 100%;
     min-height: 0;
     gap: 4px;
+    flex-direction: column-reverse;
   }
 
   .hero-showcase {
     width: clamp(64px, 13vw, 92px);
     height: clamp(64px, 13vw, 92px);
+    margin: 0 auto 0;
   }
 
   .lineup-section {
@@ -1747,13 +1753,14 @@ body {
   }
 
   .prematch-card {
-    width: 100%;
+    width: calc(100% - 20px);
     min-height: 0;
     height: 100%;
     padding: 30px 10px 8px;
     border-radius: 10px;
     background-size: cover;
     overflow: hidden;
+    margin-left: 20px;
   }
 
   .match-info-row {
@@ -1764,7 +1771,8 @@ body {
   .match-start-button {
     max-width: 168px;
     height: 42px;
-    margin-top: 0;
+    margin-top: -4px;
+    margin-bottom: 6px;
   }
 
   .prematch-card .label {
@@ -1821,7 +1829,7 @@ body {
   .match-info-matches,
   .match-info-bonuses {
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.16);
+    background: transparent;
     padding: 6px 8px;
   }
 
