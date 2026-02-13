@@ -2324,3 +2324,75 @@ body {
     margin-top: -16px !important;
   }
 }
+
+/* iOS Safari-specific stabilization for prematch layout.
+   Safari applies touch/landscape queries differently than Telegram in-app browser,
+   so we reset aggressive transforms and avoid fixed 100% height clipping. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 768px) {
+    .panel.prematch-panel {
+      height: auto !important;
+      min-height: calc(var(--app-height, 100dvh) - 90px);
+      overflow: visible !important;
+    }
+
+    .prematch-shell {
+      height: auto !important;
+      min-height: calc(var(--app-height, 100dvh) - 106px);
+    }
+
+    .prematch-left {
+      align-items: center;
+    }
+
+    .hero-showcase {
+      transform: none !important;
+      margin: 0 auto !important;
+      align-self: center !important;
+    }
+
+    .lineup-section {
+      transform: none !important;
+      padding-left: 0 !important;
+      align-items: center !important;
+    }
+
+    .lineup-slots,
+    .hero-picker.icons {
+      justify-content: center !important;
+    }
+
+    .prematch-card {
+      height: auto !important;
+      min-height: 340px;
+      background-size: 100% 100% !important;
+      background-position: center !important;
+    }
+
+    .match-info-weather {
+      margin-left: 0 !important;
+      margin-top: 0 !important;
+      transform: none !important;
+    }
+
+    .match-info-matches,
+    .match-info-bonuses {
+      margin-top: 0 !important;
+      transform: none !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .panel.prematch-panel {
+      min-height: calc(var(--app-height, 100dvh) - 80px);
+    }
+
+    .prematch-shell {
+      min-height: calc(var(--app-height, 100dvh) - 96px);
+    }
+
+    .prematch-card {
+      min-height: 300px;
+    }
+  }
+}
