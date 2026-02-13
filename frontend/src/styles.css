@@ -2395,4 +2395,62 @@ body {
       min-height: 300px;
     }
   }
+
+  /* iPhone Safari landscape can have CSS width > 768, so apply a dedicated
+     stabilization pass without width limit. */
+  @media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+    .screen {
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+    }
+
+    .panel.prematch-panel {
+      height: auto !important;
+      min-height: calc(var(--app-height, 100dvh) - 84px) !important;
+      overflow: visible !important;
+    }
+
+    .prematch-shell {
+      height: auto !important;
+      min-height: calc(var(--app-height, 100dvh) - 102px) !important;
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr) !important;
+    }
+
+    .hero-showcase {
+      transform: none !important;
+      margin: 0 auto !important;
+      align-self: center !important;
+    }
+
+    .lineup-section {
+      transform: none !important;
+      padding-left: 0 !important;
+      align-items: center !important;
+    }
+
+    .lineup-slots,
+    .hero-picker.icons {
+      justify-content: center !important;
+    }
+
+    .prematch-card {
+      height: auto !important;
+      min-height: 300px !important;
+      background-size: 100% 100% !important;
+      background-position: center !important;
+      overflow: hidden !important;
+    }
+
+    .match-info-weather {
+      margin-left: 0 !important;
+      margin-top: 0 !important;
+      transform: none !important;
+    }
+
+    .match-info-matches,
+    .match-info-bonuses {
+      margin-top: 0 !important;
+      transform: none !important;
+    }
+  }
 }
