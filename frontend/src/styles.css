@@ -2399,18 +2399,53 @@ body {
   /* iPhone Safari landscape can have CSS width > 768, so apply a dedicated
      stabilization pass without width limit. */
   @media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+    .top-resource-bar {
+      min-height: 72px !important;
+      padding: 8px 10px !important;
+      gap: 10px !important;
+      flex-wrap: nowrap !important;
+      justify-content: flex-start !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      touch-action: pan-x;
+    }
+
+    .top-resource-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .player-tag,
+    .mon-pool-counter,
+    .resource-group,
+    .streak-icons,
+    .resource-actions {
+      flex: 0 0 auto !important;
+    }
+
     .screen {
+      padding: 82px 8px 8px !important;
       overflow-y: auto !important;
       overflow-x: hidden !important;
     }
 
+    .prematch-panel {
+      margin-top: 0 !important;
+      max-width: 100% !important;
+    }
+
     .panel.prematch-panel {
+      width: 100% !important;
+      max-width: 100% !important;
+      display: block !important;
       height: auto !important;
       min-height: calc(var(--app-height, 100dvh) - 84px) !important;
       overflow: visible !important;
     }
 
     .prematch-shell {
+      width: 100% !important;
       height: auto !important;
       min-height: calc(var(--app-height, 100dvh) - 102px) !important;
       grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr) !important;
@@ -2434,6 +2469,8 @@ body {
     }
 
     .prematch-card {
+      width: 100% !important;
+      max-width: 100% !important;
       height: auto !important;
       min-height: 300px !important;
       background-size: 100% 100% !important;
