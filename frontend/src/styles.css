@@ -2625,7 +2625,7 @@ body {
   }
 
   .match-info-weather {
-    transform: translateY(30px) !important;
+    transform: translateY(15px) !important;
   }
 
   .match-info-matches,
@@ -2816,7 +2816,7 @@ body {
   }
 
   html.ios-safari-browser .match-info-weather {
-    transform: translateY(30px) !important;
+    transform: translateY(15px) !important;
   }
 
   html.ios-safari-browser .match-info-matches,
