@@ -1724,7 +1724,7 @@ body {
     height: clamp(192px, 39vw, 276px);
     margin: 0 auto;
     align-self: center;
-    transform: translateX(-50px);
+    transform: translateX(-25px);
   }
 
   .lineup-section {
@@ -1815,7 +1815,7 @@ body {
     padding: 6px 8px;
     border-radius: 10px;
     background: transparent;
-    margin-left: 50px;
+    margin-left: 80px;
   }
 
   .match-info-weather .weather-content {
@@ -1973,7 +1973,7 @@ body {
     height: 168px;
     margin: 0 auto;
     align-self: center;
-    transform: translateX(-50px);
+    transform: translateX(-25px);
   }
 
   .prematch-card .value {
@@ -2062,7 +2062,7 @@ body {
     height: 162px;
     margin: 0 auto;
     align-self: center;
-    transform: translateX(-50px);
+    transform: translateX(-25px);
   }
 
   .lineup-section {
@@ -2189,7 +2189,7 @@ body {
     height: 174px !important;
     margin: 0 auto !important;
     align-self: center !important;
-    transform: translateX(-50px) !important;
+    transform: translateX(-25px) !important;
   }
 
   .lineup-section {
@@ -2255,6 +2255,7 @@ body {
     padding: 4px 6px !important;
     border-radius: 8px !important;
     overflow: hidden;
+    transform: translateX(30px) !important;
   }
 
   .match-info-weather .weather-content {
