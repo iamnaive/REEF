@@ -1724,6 +1724,7 @@ body {
     height: clamp(192px, 39vw, 276px);
     margin: 0 auto;
     align-self: center;
+    transform: translateX(-50px);
   }
 
   .lineup-section {
@@ -1972,6 +1973,7 @@ body {
     height: 168px;
     margin: 0 auto;
     align-self: center;
+    transform: translateX(-50px);
   }
 
   .prematch-card .value {
@@ -2060,6 +2062,7 @@ body {
     height: 162px;
     margin: 0 auto;
     align-self: center;
+    transform: translateX(-50px);
   }
 
   .lineup-section {
@@ -2186,6 +2189,7 @@ body {
     height: 174px !important;
     margin: 0 auto !important;
     align-self: center !important;
+    transform: translateX(-50px) !important;
   }
 
   .lineup-section {
