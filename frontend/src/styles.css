@@ -2546,6 +2546,17 @@ body {
   .lineup-slots,
   .hero-picker.icons {
     justify-content: center !important;
+    overflow: visible !important;
+  }
+
+  .lineup-section {
+    overflow: visible !important;
+    padding-top: 3px !important;
+  }
+
+  .lineup-slot.active,
+  .hero-icon.active {
+    transform: none !important;
   }
 
   .prematch-card {
@@ -2564,6 +2575,31 @@ body {
   .match-info-bonuses {
     margin: 0 !important;
     transform: none !important;
+  }
+
+  .prematch-card-body {
+    align-items: center !important;
+  }
+
+  .match-info-weather,
+  .match-info-row {
+    width: min(94%, 420px) !important;
+    margin: 0 auto !important;
+  }
+
+  .match-info-row {
+    justify-items: center !important;
+  }
+
+  .match-info-matches,
+  .match-info-bonuses {
+    text-align: center !important;
+  }
+
+  .match-info-bonuses ul {
+    padding-left: 0 !important;
+    list-style-position: inside;
+    text-align: center;
   }
 
   .match-start-button {
@@ -2635,6 +2671,7 @@ body {
 
   html.ios-safari-browser .prematch-left {
     gap: 3px !important;
+    overflow: visible !important;
   }
 
   html.ios-safari-browser .hero-showcase {
@@ -2664,7 +2701,17 @@ body {
   html.ios-safari-browser .lineup-slots,
   html.ios-safari-browser .hero-picker.icons {
     max-width: 100% !important;
-    overflow: hidden !important;
+    overflow: visible !important;
+  }
+
+  html.ios-safari-browser .lineup-section {
+    overflow: visible !important;
+    padding-top: 3px !important;
+  }
+
+  html.ios-safari-browser .lineup-slot.active,
+  html.ios-safari-browser .hero-icon.active {
+    transform: none !important;
   }
 
   html.ios-safari-browser .prematch-card {
@@ -2700,10 +2747,30 @@ body {
 
   html.ios-safari-browser .prematch-card-body {
     gap: 4px !important;
+    align-items: center !important;
   }
 
   html.ios-safari-browser .match-info-row {
     gap: 3px !important;
+    width: min(94%, 420px) !important;
+    margin: 0 auto !important;
+    justify-items: center !important;
+  }
+
+  html.ios-safari-browser .match-info-weather {
+    width: min(94%, 420px) !important;
+    margin: 0 auto !important;
+  }
+
+  html.ios-safari-browser .match-info-matches,
+  html.ios-safari-browser .match-info-bonuses {
+    text-align: center !important;
+  }
+
+  html.ios-safari-browser .match-info-bonuses ul {
+    padding-left: 0 !important;
+    list-style-position: inside;
+    text-align: center;
   }
 
   html.ios-safari-browser .match-info-matches,
