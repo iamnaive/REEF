@@ -2491,3 +2491,82 @@ body {
     }
   }
 }
+
+/* Final mobile alignment pass:
+   keep all prematch elements centered inside the turquoise panel,
+   and reset accumulated manual offsets for iOS/Android mobile browsers. */
+@media (hover: none) and (pointer: coarse) {
+  .prematch-panel {
+    margin-top: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .panel.prematch-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+
+  .prematch-shell {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 8px !important;
+    align-items: center !important;
+  }
+
+  .prematch-left {
+    width: 100% !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+  }
+
+  .hero-showcase {
+    width: clamp(160px, 28vw, 220px) !important;
+    height: clamp(160px, 28vw, 220px) !important;
+    margin: 0 auto 8px !important;
+    align-self: center !important;
+    transform: none !important;
+  }
+
+  .lineup-section {
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding-left: 0 !important;
+    transform: none !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+
+  .lineup-slots,
+  .hero-picker.icons {
+    justify-content: center !important;
+  }
+
+  .prematch-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    background-size: 100% 100% !important;
+    background-position: center !important;
+    overflow: hidden !important;
+  }
+
+  .prematch-card-body,
+  .match-info-row,
+  .match-info-weather,
+  .match-info-matches,
+  .match-info-bonuses {
+    margin: 0 !important;
+    transform: none !important;
+  }
+
+  .match-start-button {
+    align-self: center !important;
+  }
+}
