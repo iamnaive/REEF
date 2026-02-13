@@ -1730,7 +1730,7 @@ body {
     width: 100%;
     gap: 4px;
     padding-left: 100px;
-    transform: translateX(-200px);
+    transform: translateX(-150px);
   }
 
   .lineup-slots {
@@ -2192,7 +2192,7 @@ body {
     min-width: 0;
     align-items: stretch !important;
     gap: 3px !important;
-    transform: translateX(-200px) !important;
+    transform: translateX(-150px) !important;
   }
 
   .lineup-section .label {
