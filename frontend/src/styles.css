@@ -2607,7 +2607,7 @@ body {
     width: min(100%, calc(var(--app-width, 100vw) - 16px)) !important;
     max-width: min(100%, calc(var(--app-width, 100vw) - 16px)) !important;
     margin: 0 auto !important;
-    padding: 6px !important;
+    padding: 6px 8px !important;
     height: calc(var(--app-height, 100dvh) - 72px) !important;
     min-height: calc(var(--app-height, 100dvh) - 72px) !important;
     overflow: hidden !important;
@@ -2622,6 +2622,7 @@ body {
     grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr) !important;
     gap: 4px !important;
     align-items: stretch !important;
+    overflow: hidden !important;
   }
 
   html.ios-safari-browser .prematch-left,
@@ -2629,6 +2630,7 @@ body {
     min-width: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
+    overflow: hidden !important;
   }
 
   html.ios-safari-browser .prematch-left {
@@ -2639,6 +2641,11 @@ body {
     width: 126px !important;
     height: 126px !important;
     margin: 0 auto !important;
+  }
+
+  html.ios-safari-browser .hero-showcase img {
+    max-width: 92% !important;
+    max-height: 92% !important;
   }
 
   html.ios-safari-browser .lineup-slot,
@@ -2652,6 +2659,12 @@ body {
     max-height: 62px !important;
     flex: 0 0 62px !important;
     aspect-ratio: 1 / 1 !important;
+  }
+
+  html.ios-safari-browser .lineup-slots,
+  html.ios-safari-browser .hero-picker.icons {
+    max-width: 100% !important;
+    overflow: hidden !important;
   }
 
   html.ios-safari-browser .prematch-card {
