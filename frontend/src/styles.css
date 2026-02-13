@@ -2627,7 +2627,7 @@ body {
   .match-info-weather,
   .match-info-matches,
   .match-info-bonuses {
-    transform: translate(30px, 15px) !important;
+    transform: translateY(15px) !important;
   }
 
   .match-start-button {
@@ -2815,7 +2815,7 @@ body {
   html.ios-safari-browser .match-info-weather,
   html.ios-safari-browser .match-info-matches,
   html.ios-safari-browser .match-info-bonuses {
-    transform: translate(30px, 15px) !important;
+    transform: translateY(15px) !important;
   }
 
   html.ios-safari-browser .match-info-matches,
