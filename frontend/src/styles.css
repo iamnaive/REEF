@@ -1720,9 +1720,10 @@ body {
   }
 
   .hero-showcase {
-    width: clamp(64px, 13vw, 92px);
-    height: clamp(64px, 13vw, 92px);
-    margin: 100px auto 0;
+    width: clamp(128px, 26vw, 184px);
+    height: clamp(128px, 26vw, 184px);
+    margin: 0 auto;
+    align-self: center;
   }
 
   .lineup-section {
@@ -1767,7 +1768,7 @@ body {
   .match-start-button {
     max-width: 168px;
     height: 42px;
-    margin-top: -30px;
+    margin-top: 60px;
   }
 
   .prematch-card .label {
@@ -1942,8 +1943,10 @@ body {
   }
 
   .hero-showcase {
-    width: 56px;
-    height: 56px;
+    width: 112px;
+    height: 112px;
+    margin: 0 auto;
+    align-self: center;
   }
 
   .prematch-card .value {
@@ -2028,8 +2031,10 @@ body {
   }
 
   .hero-showcase {
-    width: 54px;
-    height: 54px;
+    width: 108px;
+    height: 108px;
+    margin: 0 auto;
+    align-self: center;
   }
 
   .lineup-section {
@@ -2146,9 +2151,10 @@ body {
   }
 
   .hero-showcase {
-    width: 58px !important;
-    height: 58px !important;
-    align-self: start;
+    width: 116px !important;
+    height: 116px !important;
+    margin: 0 auto !important;
+    align-self: center !important;
   }
 
   .lineup-section {
