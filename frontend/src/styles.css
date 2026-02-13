@@ -2624,7 +2624,10 @@ body {
     text-align: center;
   }
 
-  .match-info-weather,
+  .match-info-weather {
+    transform: translateY(30px) !important;
+  }
+
   .match-info-matches,
   .match-info-bonuses {
     transform: translateY(15px) !important;
@@ -2812,7 +2815,10 @@ body {
     text-align: center;
   }
 
-  html.ios-safari-browser .match-info-weather,
+  html.ios-safari-browser .match-info-weather {
+    transform: translateY(30px) !important;
+  }
+
   html.ios-safari-browser .match-info-matches,
   html.ios-safari-browser .match-info-bonuses {
     transform: translateY(15px) !important;
