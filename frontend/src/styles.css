@@ -1782,7 +1782,7 @@ body {
   .match-start-button {
     max-width: 168px;
     height: 42px;
-    margin-top: 30px;
+    margin-top: 10px;
   }
 
   .prematch-card .label {
@@ -1815,7 +1815,8 @@ body {
     padding: 6px 8px;
     border-radius: 10px;
     background: transparent;
-    margin-left: 80px;
+    margin-left: 70px;
+    margin-top: -10px;
   }
 
   .match-info-weather .weather-content {
@@ -1842,6 +1843,11 @@ body {
     border-radius: 8px;
     background: transparent;
     padding: 6px 8px;
+    margin-top: -10px;
+  }
+
+  .match-info-matches {
+    margin-left: -10px;
   }
 
   .modal {
@@ -2255,7 +2261,15 @@ body {
     padding: 4px 6px !important;
     border-radius: 8px !important;
     overflow: hidden;
-    transform: translateX(30px) !important;
+    transform: translate(20px, -10px) !important;
+  }
+
+  .match-info-matches {
+    transform: translateX(-10px) !important;
+  }
+
+  .match-info-bonuses {
+    transform: translateY(-10px) !important;
   }
 
   .match-info-weather .weather-content {
