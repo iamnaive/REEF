@@ -1618,6 +1618,7 @@ body {
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    touch-action: pan-x;
   }
 
   .top-resource-bar::-webkit-scrollbar {
@@ -1861,6 +1862,7 @@ body {
   .top-resource-bar {
     min-height: 72px;
     padding: 6px 8px;
+    touch-action: pan-x;
   }
 
   .mon-pool-counter {

@@ -44,11 +44,17 @@ function tryFullscreen(): void {
 }
 
 if (isMobile() && !isStandalone()) {
-  const once = () => {
+  const once = (e: Event) => {
+    // Don't hijack gestures on scrollable top HUD bar
+    const target = e.target as HTMLElement | null;
+    if (target?.closest(".top-resource-bar")) return;
     tryFullscreen();
-    document.removeEventListener("pointerdown", once);
+    document.removeEventListener("click", once);
+    document.removeEventListener("touchend", once);
   };
-  document.addEventListener("pointerdown", once, { passive: true });
+  // Use click/touchend instead of pointerdown to not steal scroll gestures
+  document.addEventListener("click", once, { passive: true });
+  document.addEventListener("touchend", once, { passive: true });
 }
 
 function renderFatal(message: string) {
