@@ -2574,8 +2574,8 @@ body {
 /* iOS Safari in-browser (not fullscreen/PWA): force fit-to-viewport behavior. */
 @media (orientation: landscape) and (hover: none) and (pointer: coarse) {
   html.ios-safari-browser .top-resource-bar {
-    min-height: 64px !important;
-    padding: 6px 8px !important;
+    min-height: 60px !important;
+    padding: 4px 8px !important;
     gap: 8px !important;
     flex-wrap: nowrap !important;
     justify-content: flex-start !important;
@@ -2598,9 +2598,9 @@ body {
   }
 
   html.ios-safari-browser .screen {
-    padding: 74px 8px 8px !important;
+    padding: 66px 6px 6px !important;
     overflow-x: hidden !important;
-    overflow-y: auto !important;
+    overflow-y: hidden !important;
   }
 
   html.ios-safari-browser .panel.prematch-panel {
@@ -2608,14 +2608,20 @@ body {
     max-width: min(100%, calc(var(--app-width, 100vw) - 16px)) !important;
     margin: 0 auto !important;
     padding: 6px !important;
+    height: calc(var(--app-height, 100dvh) - 72px) !important;
+    min-height: calc(var(--app-height, 100dvh) - 72px) !important;
+    overflow: hidden !important;
   }
 
   html.ios-safari-browser .prematch-shell {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
+    height: 100% !important;
+    min-height: 0 !important;
     grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr) !important;
-    gap: 6px !important;
+    gap: 4px !important;
+    align-items: stretch !important;
   }
 
   html.ios-safari-browser .prematch-left,
@@ -2625,9 +2631,77 @@ body {
     max-width: 100% !important;
   }
 
+  html.ios-safari-browser .prematch-left {
+    gap: 3px !important;
+  }
+
+  html.ios-safari-browser .hero-showcase {
+    width: 126px !important;
+    height: 126px !important;
+    margin: 0 auto !important;
+  }
+
+  html.ios-safari-browser .lineup-slot,
+  html.ios-safari-browser .hero-picker.icons .hero-icon,
+  html.ios-safari-browser .hero-icon {
+    width: 62px !important;
+    height: 62px !important;
+    min-width: 62px !important;
+    min-height: 62px !important;
+    max-width: 62px !important;
+    max-height: 62px !important;
+    flex: 0 0 62px !important;
+    aspect-ratio: 1 / 1 !important;
+  }
+
   html.ios-safari-browser .prematch-card {
     overflow: hidden !important;
     background-size: 100% 100% !important;
     background-position: center !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    padding: 12px 6px 4px !important;
+    border-radius: 8px !important;
+  }
+
+  html.ios-safari-browser .weather-card.large img {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  html.ios-safari-browser .prematch-card .label {
+    font-size: 8px !important;
+    margin-bottom: 0 !important;
+  }
+
+  html.ios-safari-browser .prematch-card .value {
+    font-size: 11px !important;
+    line-height: 1.05 !important;
+  }
+
+  html.ios-safari-browser .prematch-card .hint,
+  html.ios-safari-browser .match-info-bonuses ul li {
+    font-size: 8px !important;
+    line-height: 1.05 !important;
+  }
+
+  html.ios-safari-browser .prematch-card-body {
+    gap: 4px !important;
+  }
+
+  html.ios-safari-browser .match-info-row {
+    gap: 3px !important;
+  }
+
+  html.ios-safari-browser .match-info-matches,
+  html.ios-safari-browser .match-info-bonuses,
+  html.ios-safari-browser .match-info-weather {
+    padding: 3px 5px !important;
+  }
+
+  html.ios-safari-browser .match-start-button {
+    max-width: 118px !important;
+    height: 30px !important;
+    margin-top: -8px !important;
   }
 }
