@@ -2570,3 +2570,64 @@ body {
     align-self: center !important;
   }
 }
+
+/* iOS Safari in-browser (not fullscreen/PWA): force fit-to-viewport behavior. */
+@media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  html.ios-safari-browser .top-resource-bar {
+    min-height: 64px !important;
+    padding: 6px 8px !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x !important;
+  }
+
+  html.ios-safari-browser .top-resource-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  html.ios-safari-browser .player-tag,
+  html.ios-safari-browser .mon-pool-counter,
+  html.ios-safari-browser .resource-group,
+  html.ios-safari-browser .streak-icons,
+  html.ios-safari-browser .resource-actions {
+    flex: 0 0 auto !important;
+  }
+
+  html.ios-safari-browser .screen {
+    padding: 74px 8px 8px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  html.ios-safari-browser .panel.prematch-panel {
+    width: min(100%, calc(var(--app-width, 100vw) - 16px)) !important;
+    max-width: min(100%, calc(var(--app-width, 100vw) - 16px)) !important;
+    margin: 0 auto !important;
+    padding: 6px !important;
+  }
+
+  html.ios-safari-browser .prematch-shell {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr) !important;
+    gap: 6px !important;
+  }
+
+  html.ios-safari-browser .prematch-left,
+  html.ios-safari-browser .prematch-card {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  html.ios-safari-browser .prematch-card {
+    overflow: hidden !important;
+    background-size: 100% 100% !important;
+    background-position: center !important;
+  }
+}

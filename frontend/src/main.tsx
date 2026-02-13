@@ -9,12 +9,30 @@ import { ResourceProvider } from "./resources";
  * We compute the real visible height and expose it as a CSS custom property
  * that the rest of the CSS uses via `var(--app-height, 100dvh)`.
  */
-function setAppHeight() {
-  document.documentElement.style.setProperty("--app-height", `${window.innerHeight}px`);
+function setAppViewport() {
+  const vv = window.visualViewport;
+  const height = vv?.height ?? window.innerHeight;
+  const width = vv?.width ?? window.innerWidth;
+  document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
+  document.documentElement.style.setProperty("--app-width", `${Math.round(width)}px`);
 }
-setAppHeight();
-window.addEventListener("resize", setAppHeight);
-window.addEventListener("orientationchange", () => setTimeout(setAppHeight, 150));
+setAppViewport();
+window.addEventListener("resize", setAppViewport);
+window.addEventListener("orientationchange", () => setTimeout(setAppViewport, 150));
+window.visualViewport?.addEventListener("resize", setAppViewport);
+window.visualViewport?.addEventListener("scroll", setAppViewport);
+
+function isIosSafariBrowser(): boolean {
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const isWebKit = /WebKit/i.test(ua);
+  const isNotAltBrowser = !/CriOS|FxiOS|EdgiOS|OPiOS|YaBrowser/i.test(ua);
+  return isIOS && isWebKit && isNotAltBrowser;
+}
+
+if (isIosSafariBrowser() && !window.matchMedia("(display-mode: standalone)").matches) {
+  document.documentElement.classList.add("ios-safari-browser");
+}
 
 /* ── Mobile fullscreen on first interaction ──
  * On mobile browsers we request native fullscreen so the address bar,
@@ -43,7 +61,7 @@ function tryFullscreen(): void {
   }
 }
 
-if (isMobile() && !isStandalone()) {
+if (isMobile() && !isStandalone() && !isIosSafariBrowser()) {
   const once = (e: Event) => {
     // Don't hijack gestures on scrollable top HUD bar
     const target = e.target as HTMLElement | null;
