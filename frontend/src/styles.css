@@ -1720,8 +1720,8 @@ body {
   }
 
   .hero-showcase {
-    width: clamp(128px, 26vw, 184px);
-    height: clamp(128px, 26vw, 184px);
+    width: clamp(192px, 39vw, 276px);
+    height: clamp(192px, 39vw, 276px);
     margin: 0 auto;
     align-self: center;
   }
@@ -1740,6 +1740,12 @@ body {
   .lineup-slot {
     width: 88px;
     height: 88px;
+    min-width: 88px;
+    min-height: 88px;
+    max-width: 88px;
+    max-height: 88px;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 88px;
     border-radius: 9px;
   }
 
@@ -1747,6 +1753,12 @@ body {
   .hero-icon {
     width: 88px;
     height: 88px;
+    min-width: 88px;
+    min-height: 88px;
+    max-width: 88px;
+    max-height: 88px;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 88px;
     border-radius: 9px;
   }
 
@@ -1911,6 +1923,12 @@ body {
   .lineup-slot {
     width: 80px;
     height: 80px;
+    min-width: 80px;
+    min-height: 80px;
+    max-width: 80px;
+    max-height: 80px;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 80px;
     border-radius: 10px;
   }
 
@@ -1918,6 +1936,12 @@ body {
   .hero-icon {
     width: 80px;
     height: 80px;
+    min-width: 80px;
+    min-height: 80px;
+    max-width: 80px;
+    max-height: 80px;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 80px;
     border-radius: 8px;
   }
 
@@ -1943,8 +1967,8 @@ body {
   }
 
   .hero-showcase {
-    width: 112px;
-    height: 112px;
+    width: 168px;
+    height: 168px;
     margin: 0 auto;
     align-self: center;
   }
@@ -2031,8 +2055,8 @@ body {
   }
 
   .hero-showcase {
-    width: 108px;
-    height: 108px;
+    width: 162px;
+    height: 162px;
     margin: 0 auto;
     align-self: center;
   }
@@ -2051,6 +2075,12 @@ body {
   .hero-icon {
     width: 72px;
     height: 72px;
+    min-width: 72px;
+    min-height: 72px;
+    max-width: 72px;
+    max-height: 72px;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 72px;
     border-radius: 7px;
   }
 
@@ -2151,8 +2181,8 @@ body {
   }
 
   .hero-showcase {
-    width: 116px !important;
-    height: 116px !important;
+    width: 174px !important;
+    height: 174px !important;
     margin: 0 auto !important;
     align-self: center !important;
   }
@@ -2186,6 +2216,12 @@ body {
   .hero-icon {
     width: 58px !important;
     height: 58px !important;
+    min-width: 58px !important;
+    min-height: 58px !important;
+    max-width: 58px !important;
+    max-height: 58px !important;
+    aspect-ratio: 1 / 1 !important;
+    flex: 0 0 58px !important;
     border-radius: 8px !important;
   }
 
