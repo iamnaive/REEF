@@ -59,6 +59,52 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+.maintenance-root {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: url("/assets/ui/menu_background.avif") center / cover no-repeat;
+  z-index: 9999;
+}
+
+.maintenance-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.25);
+}
+
+.maintenance-tape {
+  position: relative;
+  width: min(94vw, 860px);
+  min-height: clamp(56px, 10vw, 96px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-6deg);
+  border: 3px solid rgba(0, 0, 0, 0.78);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      #ffd200 0 22px,
+      #111111 22px 44px
+    );
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+.maintenance-tape span {
+  padding: 8px 18px;
+  background: rgba(255, 210, 0, 0.92);
+  border: 2px solid rgba(0, 0, 0, 0.86);
+  color: #0a0a0a;
+  font-size: clamp(20px, 4.4vw, 38px);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
 .app {
   position: relative;
   width: 100%;

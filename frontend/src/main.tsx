@@ -4,6 +4,18 @@ import App from "./App";
 import "./styles.css";
 import { ResourceProvider } from "./resources";
 
+const MAINTENANCE_MODE = true;
+
+function MaintenanceScreen() {
+  return (
+    <div className="maintenance-root" role="status" aria-live="polite">
+      <div className="maintenance-tape">
+        <span>UNDER MAINTENANCE</span>
+      </div>
+    </div>
+  );
+}
+
 /* ── iOS Safari viewport height fix ──
  * On mobile Safari the toolbar slides in/out, making CSS `100vh` unreliable.
  * We compute the real visible height and expose it as a CSS custom property
@@ -108,9 +120,13 @@ window.addEventListener("unhandledrejection", (event) => {
 try {
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-      <ResourceProvider>
-        <App />
-      </ResourceProvider>
+      {MAINTENANCE_MODE ? (
+        <MaintenanceScreen />
+      ) : (
+        <ResourceProvider>
+          <App />
+        </ResourceProvider>
+      )}
     </React.StrictMode>
   );
 } catch (error) {
