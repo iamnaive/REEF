@@ -167,6 +167,28 @@ CREATE TABLE IF NOT EXISTS player_resources (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS player_action_state (
+  address TEXT NOT NULL,
+  action_key TEXT NOT NULL,
+  charges INTEGER NOT NULL DEFAULT 0,
+  last_action_ms INTEGER NOT NULL DEFAULT 0,
+  last_regen_ms INTEGER NOT NULL DEFAULT 0,
+  daily_count INTEGER NOT NULL DEFAULT 0,
+  daily_reset_ymd TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (address, action_key)
+);
+
+CREATE TABLE IF NOT EXISTS wallet_presence (
+  address TEXT PRIMARY KEY,
+  first_login_at TEXT NOT NULL,
+  last_login_at TEXT NOT NULL,
+  last_seen_ms INTEGER NOT NULL DEFAULT 0,
+  total_play_ms INTEGER NOT NULL DEFAULT 0,
+  sessions_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
 CREATE INDEX IF NOT EXISTS idx_daily_limits_address_day ON daily_limits (address, day_key);
 CREATE INDEX IF NOT EXISTS idx_match_bank_address ON match_bank (address);

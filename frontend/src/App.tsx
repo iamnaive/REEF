@@ -33,7 +33,8 @@ import {
   resolveMatch,
   claimDailyChest,
   fetchBase,
-  fetchPoolStats
+  fetchPoolStats,
+  pingPresence
 } from "./api";
 import { useResources } from "./resources";
 import { fadeOutMenuLoop, playMenuLoop, playSfx, playRandomKnock, preloadSfx, setSfxEnabled } from "./game/sounds";
@@ -550,6 +551,35 @@ export default function App() {
       loadState().catch(() => null);
     }
   }, [token, loadState]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const sendPing = async () => {
+      if (cancelled) return;
+      if (document.visibilityState === "hidden") return;
+      try {
+        await pingPresence(token);
+      } catch {
+        // Ignore intermittent ping failures.
+      }
+    };
+    void sendPing();
+    const timer = window.setInterval(() => {
+      void sendPing();
+    }, 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void sendPing();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [token]);
 
   const onPlay = async () => {
     playSfx("buttonClick");

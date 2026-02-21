@@ -304,3 +304,79 @@ export async function getResources(token: string) {
     serverNowMs: number;
   };
 }
+
+export async function performAction(
+  token: string,
+  actionKey: string,
+  payload?: Record<string, unknown>
+) {
+  const res = await fetch(`${API_BASE}/api/action/perform`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({ actionKey, ...(payload ? { payload } : {}) })
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new ApiRequestError("Action perform failed", res.status, data);
+  }
+  return data as {
+    ok: boolean;
+    resources?: BaseAuthoritativeResources;
+    actionState?: {
+      actionKey: string;
+      charges: number;
+      chargeCap: number;
+      remainingMs: number;
+      nextRegenMs: number;
+      dailyCount: number;
+      dailyCap: number;
+    };
+    serverNowMs: number;
+  };
+}
+
+export async function pingPresence(token: string) {
+  const res = await fetch(`${API_BASE}/api/presence/ping`, {
+    method: "POST",
+    headers: getHeaders(token)
+  });
+  if (!res.ok) {
+    const details = await res.json().catch(() => null);
+    throw new ApiRequestError("Presence ping failed", res.status, details);
+  }
+  return (await res.json()) as {
+    ok: true;
+    nowMs: number;
+    presence: {
+      address: string;
+      totalPlayMs: number;
+      sessionsCount: number;
+      lastLoginAt: string;
+      updatedAt: string;
+    };
+  };
+}
+
+export async function fetchWalletPresence(adminApiKey: string) {
+  const res = await fetch(`${API_BASE}/api/admin/wallet-presence`, {
+    headers: {
+      "x-admin-key": adminApiKey
+    }
+  });
+  if (!res.ok) {
+    const details = await res.json().catch(() => null);
+    throw new ApiRequestError("Failed to load wallet presence", res.status, details);
+  }
+  return (await res.json()) as {
+    wallets: Array<{
+      address: string;
+      firstLoginAt: string;
+      lastLoginAt: string;
+      lastSeenMs: number;
+      totalPlayMs: number;
+      totalPlayMinutes: number;
+      sessionsCount: number;
+      updatedAt: string;
+    }>;
+  };
+}

@@ -35,6 +35,7 @@ type Env = {
   ENTRY_RECEIVER?: string;
   ENTRY_FEE_WEI?: string;
   POOL_BASE_WEI?: string;
+  ADMIN_API_KEY?: string;
 };
 
 const router = Router();
@@ -55,6 +56,7 @@ const MAX_RESOURCES_OFFLINE_MS = 12 * 60 * 60 * 1000;
 const SHARD_MINE_CASH_PER_HOUR_BY_LEVEL = [80, 180, 320, 500];
 const PEARL_GROTTO_YIELD_PER_HOUR_BY_LEVEL = [35, 80, 150, 240];
 const TRAINING_REEF_ALPHA_PER_HOUR_BY_LEVEL = [20, 48, 90, 150];
+const PRESENCE_MAX_DELTA_MS = 5 * 60_000;
 const INITIAL_PLAYER_RESOURCES = {
   cash: 600,
   yield: 0,
@@ -64,6 +66,42 @@ const INITIAL_PLAYER_RESOURCES = {
   mon: 0
 } as const;
 const baseBlobWriteGuard = new Map<string, number>();
+
+type ActionConfig = {
+  cooldownMs: number;
+  chargeCap: number;
+  regenMsPerCharge: number;
+  dailyCap: number;
+  buildingType: BuildingType;
+  reward: Partial<Pick<AuthoritativeResources, "cash" | "yield" | "alpha">>;
+};
+
+const ACTION_CONFIG: Record<string, ActionConfig> = {
+  "collect:shard_mine": {
+    cooldownMs: 60_000,
+    chargeCap: 6,
+    regenMsPerCharge: 30 * 60_000,
+    dailyCap: 0,
+    buildingType: "shard_mine",
+    reward: { cash: 120 }
+  },
+  "collect:pearl_grotto": {
+    cooldownMs: 120_000,
+    chargeCap: 4,
+    regenMsPerCharge: 60 * 60_000,
+    dailyCap: 0,
+    buildingType: "pearl_grotto",
+    reward: { yield: 80 }
+  },
+  "activate:training_reef": {
+    cooldownMs: 300_000,
+    chargeCap: 3,
+    regenMsPerCharge: 2 * 60 * 60_000,
+    dailyCap: 0,
+    buildingType: "training_reef",
+    reward: { alpha: 90 }
+  }
+};
 router.options("*", () => new Response(null, { headers: CORS_HEADERS }));
 
 router.get("/api/health", () => json({ ok: true }));
@@ -263,6 +301,7 @@ router.post("/api/guest", async (request: Request, env: Env) => {
   )
     .bind(address, now, now)
     .run();
+  await markWalletLogin(env, address, Date.now());
 
   await logEvent(env, address, "guest_login", { address }, request);
 
@@ -349,6 +388,7 @@ router.post("/api/login", async (request: Request, env: Env) => {
   )
     .bind(address, now, now)
     .run();
+  await markWalletLogin(env, address, Date.now());
   await env.DB.prepare("DELETE FROM nonces WHERE address = ?")
     .bind(address)
     .run();
@@ -471,6 +511,55 @@ router.get("/api/state", async (request: Request, env: Env) => {
     hasOnboarded: user?.has_onboarded === 1,
     resources,
     dailyChest
+  });
+});
+
+router.post("/api/presence/ping", async (request: Request, env: Env) => {
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const nowMs = Date.now();
+  const presence = await markWalletSeen(env, auth.address, nowMs);
+  return json({
+    ok: true,
+    nowMs,
+    presence: {
+      address: auth.address,
+      totalPlayMs: presence.totalPlayMs,
+      sessionsCount: presence.sessionsCount,
+      lastLoginAt: presence.lastLoginAt,
+      updatedAt: presence.updatedAt
+    }
+  });
+});
+
+router.get("/api/admin/wallet-presence", async (request: Request, env: Env) => {
+  const adminKey = request.headers.get("x-admin-key") || "";
+  if (!env.ADMIN_API_KEY || adminKey !== env.ADMIN_API_KEY) {
+    return json({ error: "Forbidden" }, 403);
+  }
+  await ensureWalletPresenceTable(env);
+  const rows = await env.DB.prepare(
+    "SELECT address, first_login_at, last_login_at, last_seen_ms, total_play_ms, sessions_count, updated_at FROM wallet_presence ORDER BY updated_at DESC LIMIT 2000"
+  ).all<{
+    address: string;
+    first_login_at: string;
+    last_login_at: string;
+    last_seen_ms: number;
+    total_play_ms: number;
+    sessions_count: number;
+    updated_at: string;
+  }>();
+  return json({
+    wallets: rows.results.map((row) => ({
+      address: row.address,
+      firstLoginAt: row.first_login_at,
+      lastLoginAt: row.last_login_at,
+      lastSeenMs: row.last_seen_ms,
+      totalPlayMs: row.total_play_ms,
+      totalPlayMinutes: Math.floor((row.total_play_ms || 0) / 60000),
+      sessionsCount: row.sessions_count,
+      updatedAt: row.updated_at
+    }))
   });
 });
 
@@ -1088,6 +1177,111 @@ router.post("/api/base/state", async (request: Request, env: Env) => {
   return json({ ok: true, updatedAt });
 });
 
+router.post("/api/action/perform", async (request: Request, env: Env) => {
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ ok: false, code: "UNAUTHORIZED" }, 401);
+  const body = await readBody(request);
+  const schema = z.object({
+    actionKey: z.string().min(1).max(120),
+    payload: z.record(z.unknown()).optional()
+  });
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return json({ ok: false, code: "INVALID_PAYLOAD" }, 400);
+
+  const nowMs = Date.now();
+  const actionKey = parsed.data.actionKey;
+  const config = ACTION_CONFIG[actionKey];
+  if (!config) {
+    return json({ ok: false, code: "UNSUPPORTED_ACTION" }, 400);
+  }
+
+  const resources = await tickAuthoritativeResources(env, auth.address, nowMs);
+  const actionState = await getOrCreateActionState(env, auth.address, actionKey, config, nowMs);
+  const nowYmd = getUtcYmd(nowMs);
+  const resetState = applyDailyResetActionState(actionState, nowYmd);
+  const readyState = regenChargesActionState(resetState, nowMs, config.regenMsPerCharge, config.chargeCap);
+  const gate = canUseActionState(readyState, nowMs, config.cooldownMs, config.chargeCap, config.dailyCap);
+  if (!gate.ok) {
+    await saveActionState(env, auth.address, actionKey, readyState);
+    return json(
+      {
+        ok: false,
+        code: gate.code,
+        state: {
+          charges: readyState.charges,
+          chargeCap: config.chargeCap,
+          remainingMs: gate.remainingMs ?? 0,
+          nextRegenMs: gate.nextRegenMs ?? 0,
+          dailyCount: readyState.dailyCount,
+          dailyCap: config.dailyCap
+        },
+        resources,
+        serverNowMs: nowMs
+      },
+      429
+    );
+  }
+
+  await ensureBaseTable(env);
+  const building = await env.DB.prepare(
+    "SELECT level FROM base_buildings WHERE address = ? AND building_type = ?"
+  )
+    .bind(auth.address, config.buildingType)
+    .first<{ level: number }>();
+  if (!building) {
+    await saveActionState(env, auth.address, actionKey, readyState);
+    return json({ ok: false, code: "UNSUPPORTED_ACTION", resources, serverNowMs: nowMs }, 400);
+  }
+
+  const level = Math.max(1, Math.min(4, building.level || 1));
+  const nextState = consumeUseActionState(readyState, nowMs, config.chargeCap);
+  const rewardCash = (config.reward.cash ?? 0) * level;
+  const rewardYield = (config.reward.yield ?? 0) * level;
+  const rewardAlpha = (config.reward.alpha ?? 0) * level;
+
+  const updatedAt = new Date(nowMs).toISOString();
+  const nextResources = {
+    ...resources,
+    cash: resources.cash + rewardCash,
+    yield: resources.yield + rewardYield,
+    alpha: resources.alpha + rewardAlpha,
+    updatedAt
+  };
+
+  await env.DB.batch([
+    env.DB.prepare(
+      "UPDATE player_resources SET cash = ?, yield = ?, alpha = ?, updated_at = ? WHERE address = ?"
+    ).bind(nextResources.cash, nextResources.yield, nextResources.alpha, updatedAt, auth.address),
+    env.DB.prepare(
+      "INSERT INTO player_action_state (address, action_key, charges, last_action_ms, last_regen_ms, daily_count, daily_reset_ymd, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(address, action_key) DO UPDATE SET charges = excluded.charges, last_action_ms = excluded.last_action_ms, last_regen_ms = excluded.last_regen_ms, daily_count = excluded.daily_count, daily_reset_ymd = excluded.daily_reset_ymd, updated_at = excluded.updated_at"
+    ).bind(
+      auth.address,
+      actionKey,
+      nextState.charges,
+      nextState.lastActionMs,
+      nextState.lastRegenMs,
+      nextState.dailyCount,
+      nextState.dailyResetYmd,
+      updatedAt
+    )
+  ]);
+
+  return json({
+    ok: true,
+    resources: nextResources,
+    actionState: {
+      actionKey,
+      charges: nextState.charges,
+      chargeCap: config.chargeCap,
+      remainingMs: config.cooldownMs,
+      nextRegenMs: config.regenMsPerCharge,
+      dailyCount: nextState.dailyCount,
+      dailyCap: config.dailyCap
+    },
+    serverNowMs: nowMs
+  });
+});
+
 router.all("*", () => json({ error: "Not found" }, 404));
 
 export default {
@@ -1575,6 +1769,12 @@ async function ensureCoreTables(env: Env) {
     ),
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS player_resources (address TEXT PRIMARY KEY, cash INTEGER NOT NULL DEFAULT 0, yield INTEGER NOT NULL DEFAULT 0, alpha INTEGER NOT NULL DEFAULT 0, faith INTEGER NOT NULL DEFAULT 0, tickets INTEGER NOT NULL DEFAULT 0, mon INTEGER NOT NULL DEFAULT 0, last_tick_ms INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS player_action_state (address TEXT NOT NULL, action_key TEXT NOT NULL, charges INTEGER NOT NULL DEFAULT 0, last_action_ms INTEGER NOT NULL DEFAULT 0, last_regen_ms INTEGER NOT NULL DEFAULT 0, daily_count INTEGER NOT NULL DEFAULT 0, daily_reset_ymd TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL, PRIMARY KEY (address, action_key))"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS wallet_presence (address TEXT PRIMARY KEY, first_login_at TEXT NOT NULL, last_login_at TEXT NOT NULL, last_seen_ms INTEGER NOT NULL DEFAULT 0, total_play_ms INTEGER NOT NULL DEFAULT 0, sessions_count INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)"
     )
   ]);
   coreTablesReady = true;
@@ -1746,6 +1946,243 @@ async function tickAuthoritativeResources(
     yield: nextYield,
     alpha: nextAlpha,
     lastTickMs: nowMs,
+    updatedAt
+  };
+}
+
+type PlayerActionStateRow = {
+  charges: number;
+  lastActionMs: number;
+  lastRegenMs: number;
+  dailyCount: number;
+  dailyResetYmd: string;
+};
+
+type ActionGateResult =
+  | { ok: true }
+  | { ok: false; code: "COOLDOWN" | "NO_CHARGES" | "DAILY_CAP"; remainingMs?: number; nextRegenMs?: number };
+
+let playerActionStateTableReady = false;
+async function ensurePlayerActionStateTable(env: Env) {
+  if (playerActionStateTableReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS player_action_state (address TEXT NOT NULL, action_key TEXT NOT NULL, charges INTEGER NOT NULL DEFAULT 0, last_action_ms INTEGER NOT NULL DEFAULT 0, last_regen_ms INTEGER NOT NULL DEFAULT 0, daily_count INTEGER NOT NULL DEFAULT 0, daily_reset_ymd TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL, PRIMARY KEY (address, action_key))"
+  ).run();
+  playerActionStateTableReady = true;
+}
+
+async function getOrCreateActionState(
+  env: Env,
+  address: string,
+  actionKey: string,
+  config: ActionConfig,
+  nowMs: number
+): Promise<PlayerActionStateRow> {
+  await ensurePlayerActionStateTable(env);
+  const row = await env.DB.prepare(
+    "SELECT charges, last_action_ms, last_regen_ms, daily_count, daily_reset_ymd FROM player_action_state WHERE address = ? AND action_key = ?"
+  )
+    .bind(address, actionKey)
+    .first<{
+      charges: number;
+      last_action_ms: number;
+      last_regen_ms: number;
+      daily_count: number;
+      daily_reset_ymd: string;
+    }>();
+  if (row) {
+    return {
+      charges: row.charges,
+      lastActionMs: row.last_action_ms,
+      lastRegenMs: row.last_regen_ms,
+      dailyCount: row.daily_count,
+      dailyResetYmd: row.daily_reset_ymd
+    };
+  }
+  const init: PlayerActionStateRow = {
+    charges: config.chargeCap,
+    lastActionMs: 0,
+    lastRegenMs: nowMs,
+    dailyCount: 0,
+    dailyResetYmd: getUtcYmd(nowMs)
+  };
+  await saveActionState(env, address, actionKey, init);
+  return init;
+}
+
+function regenChargesActionState(
+  row: PlayerActionStateRow,
+  nowMs: number,
+  regenMsPerCharge: number,
+  chargeCap: number
+): PlayerActionStateRow {
+  if (regenMsPerCharge <= 0 || chargeCap <= 0) return row;
+  if (row.charges >= chargeCap) {
+    return { ...row, lastRegenMs: nowMs };
+  }
+  const elapsed = Math.max(0, nowMs - row.lastRegenMs);
+  const add = Math.floor(elapsed / regenMsPerCharge);
+  if (add <= 0) return row;
+  const charges = Math.min(chargeCap, row.charges + add);
+  const lastRegenMs = row.lastRegenMs + add * regenMsPerCharge;
+  return { ...row, charges, lastRegenMs };
+}
+
+function applyDailyResetActionState(row: PlayerActionStateRow, nowYmd: string): PlayerActionStateRow {
+  if (row.dailyResetYmd === nowYmd) return row;
+  return {
+    ...row,
+    dailyResetYmd: nowYmd,
+    dailyCount: 0
+  };
+}
+
+function canUseActionState(
+  row: PlayerActionStateRow,
+  nowMs: number,
+  cooldownMs: number,
+  chargeCap: number,
+  dailyCap: number
+): ActionGateResult {
+  if (cooldownMs > 0) {
+    const elapsed = nowMs - row.lastActionMs;
+    if (elapsed < cooldownMs) {
+      return { ok: false, code: "COOLDOWN", remainingMs: cooldownMs - elapsed };
+    }
+  }
+  if (dailyCap > 0 && row.dailyCount >= dailyCap) {
+    return { ok: false, code: "DAILY_CAP" };
+  }
+  if (chargeCap > 0 && row.charges <= 0) {
+    return { ok: false, code: "NO_CHARGES" };
+  }
+  return { ok: true };
+}
+
+function consumeUseActionState(row: PlayerActionStateRow, nowMs: number, chargeCap: number): PlayerActionStateRow {
+  return {
+    ...row,
+    charges: chargeCap > 0 ? Math.max(0, row.charges - 1) : row.charges,
+    lastActionMs: nowMs,
+    dailyCount: row.dailyCount + 1
+  };
+}
+
+async function saveActionState(env: Env, address: string, actionKey: string, state: PlayerActionStateRow) {
+  await ensurePlayerActionStateTable(env);
+  await env.DB.prepare(
+    "INSERT INTO player_action_state (address, action_key, charges, last_action_ms, last_regen_ms, daily_count, daily_reset_ymd, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(address, action_key) DO UPDATE SET charges = excluded.charges, last_action_ms = excluded.last_action_ms, last_regen_ms = excluded.last_regen_ms, daily_count = excluded.daily_count, daily_reset_ymd = excluded.daily_reset_ymd, updated_at = excluded.updated_at"
+  )
+    .bind(
+      address,
+      actionKey,
+      state.charges,
+      state.lastActionMs,
+      state.lastRegenMs,
+      state.dailyCount,
+      state.dailyResetYmd,
+      new Date().toISOString()
+    )
+    .run();
+}
+
+function getUtcYmd(nowMs: number): string {
+  const date = new Date(nowMs);
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+type WalletPresenceRow = {
+  address: string;
+  firstLoginAt: string;
+  lastLoginAt: string;
+  lastSeenMs: number;
+  totalPlayMs: number;
+  sessionsCount: number;
+  updatedAt: string;
+};
+
+let walletPresenceTableReady = false;
+async function ensureWalletPresenceTable(env: Env) {
+  if (walletPresenceTableReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS wallet_presence (address TEXT PRIMARY KEY, first_login_at TEXT NOT NULL, last_login_at TEXT NOT NULL, last_seen_ms INTEGER NOT NULL DEFAULT 0, total_play_ms INTEGER NOT NULL DEFAULT 0, sessions_count INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)"
+  ).run();
+  walletPresenceTableReady = true;
+}
+
+async function getWalletPresence(env: Env, address: string): Promise<WalletPresenceRow | null> {
+  await ensureWalletPresenceTable(env);
+  const row = await env.DB.prepare(
+    "SELECT address, first_login_at, last_login_at, last_seen_ms, total_play_ms, sessions_count, updated_at FROM wallet_presence WHERE address = ?"
+  )
+    .bind(address)
+    .first<{
+      address: string;
+      first_login_at: string;
+      last_login_at: string;
+      last_seen_ms: number;
+      total_play_ms: number;
+      sessions_count: number;
+      updated_at: string;
+    }>();
+  if (!row) return null;
+  return {
+    address: row.address,
+    firstLoginAt: row.first_login_at,
+    lastLoginAt: row.last_login_at,
+    lastSeenMs: row.last_seen_ms || 0,
+    totalPlayMs: row.total_play_ms || 0,
+    sessionsCount: row.sessions_count || 0,
+    updatedAt: row.updated_at
+  };
+}
+
+async function markWalletLogin(env: Env, address: string, nowMs: number) {
+  await ensureWalletPresenceTable(env);
+  const nowIso = new Date(nowMs).toISOString();
+  await env.DB.prepare(
+    "INSERT INTO wallet_presence (address, first_login_at, last_login_at, last_seen_ms, total_play_ms, sessions_count, updated_at) VALUES (?, ?, ?, ?, 0, 1, ?) ON CONFLICT(address) DO UPDATE SET last_login_at = excluded.last_login_at, last_seen_ms = excluded.last_seen_ms, sessions_count = wallet_presence.sessions_count + 1, updated_at = excluded.updated_at"
+  )
+    .bind(address, nowIso, nowIso, nowMs, nowIso)
+    .run();
+}
+
+async function markWalletSeen(env: Env, address: string, nowMs: number): Promise<WalletPresenceRow> {
+  await ensureWalletPresenceTable(env);
+  let row = await getWalletPresence(env, address);
+  if (!row) {
+    await markWalletLogin(env, address, nowMs);
+    row = await getWalletPresence(env, address);
+    if (!row) {
+      const nowIso = new Date(nowMs).toISOString();
+      return {
+        address,
+        firstLoginAt: nowIso,
+        lastLoginAt: nowIso,
+        lastSeenMs: nowMs,
+        totalPlayMs: 0,
+        sessionsCount: 1,
+        updatedAt: nowIso
+      };
+    }
+  }
+
+  const deltaMs = Math.max(0, Math.min(PRESENCE_MAX_DELTA_MS, nowMs - row.lastSeenMs));
+  const totalPlayMs = row.totalPlayMs + deltaMs;
+  const updatedAt = new Date(nowMs).toISOString();
+  await env.DB.prepare(
+    "UPDATE wallet_presence SET last_seen_ms = ?, total_play_ms = ?, updated_at = ? WHERE address = ?"
+  )
+    .bind(nowMs, totalPlayMs, updatedAt, address)
+    .run();
+
+  return {
+    ...row,
+    lastSeenMs: nowMs,
+    totalPlayMs,
     updatedAt
   };
 }
