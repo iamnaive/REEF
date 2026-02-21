@@ -122,6 +122,21 @@ type ServerResourceLike = Partial<{
   shards: number;
 }>;
 
+function createServerPendingResourceState(now: number): ResourceState {
+  return {
+    res: {
+      cash: 0,
+      yield: 0,
+      alpha: 0,
+      faith: 0,
+      tickets: 0,
+      mon: 0
+    },
+    startedAtMs: now,
+    lastTickMs: now
+  };
+}
+
 type BaseScreenProps = {
   token: string | null;
   soundEnabled: boolean;
@@ -526,7 +541,10 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
   const [buildQueue, setBuildQueue] = useState<BuildQueueState>(() => ({ active: null, queued: [] }));
   const [tickNowMs, setTickNowMs] = useState<number>(() => nowMs());
   const [chargesFlash, setChargesFlash] = useState(false);
-  const [resourceState, setResourceState] = useState<ResourceState>(() => loadResourceState());
+  const [resourceState, setResourceState] = useState<ResourceState>(() => {
+    const now = nowMs();
+    return token ? createServerPendingResourceState(now) : loadResourceState();
+  });
 
   const [selectedCellId, setSelectedCellId] = useState<CellId | null>(null);
   const [hoveredCellId, setHoveredCellId] = useState<CellId | null>(null);
@@ -670,7 +688,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
       const baseDefaultCells = cloneCells(BASE_CELL_DEFAULTS);
       const baseDefaultPlacements = createDefaultPlacements();
       const baseDefaultQueue: BuildQueueState = { active: null, queued: [] };
-      const baseDefaultResources = loadResourceState();
+      const baseDefaultResources = token ? createServerPendingResourceState(now) : loadResourceState();
       const baseDefaultMechanics = clearDebuffs(loadMechanicsState());
 
       let sourceCells = baseDefaultCells;
