@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PhaserGame } from "./game/PhaserGame";
 import { eventBus } from "./game/eventBus";
+import { BaseScreenServer } from "./ui/BaseScreenServer";
 import {
   HEROES,
   HeroType,
@@ -13,10 +14,7 @@ import {
   ARTIFACTS,
   ArtifactDef,
   InventoryState,
-  BUILDINGS,
   BaseState,
-  BuildingType,
-  PlayerBuilding,
   DailyChestState,
   DAILY_CHEST_TIERS,
   LeaderboardEntry
@@ -34,35 +32,40 @@ import {
   openChest,
   prepareMatch,
   resolveMatch,
-  fetchBase,
-  buildOrUpgrade,
-  collectBaseResources,
   claimDailyChest,
-  fetchEntryStatus,
-  fetchPoolStats,
-  verifyEntryPayment
+  fetchBase,
+  fetchPoolStats
 } from "./api";
 import { useResources } from "./resources";
 import { fadeOutMenuLoop, playMenuLoop, playSfx, playRandomKnock, preloadSfx, setSfxEnabled } from "./game/sounds";
 import { closeWalletModal, getWalletProvider } from "./walletProvider";
+import {
+  assertNoForbiddenStorageKeysDev,
+  clearStoredAuth,
+  readStoredAddress,
+  readStoredToken,
+  writeStoredAuth
+} from "./auth/storage";
 
 type Screen =
   | "menu"
   | "onboarding"
   | "pre"
   | "loading"
-  | "battle";
+  | "battle"
+  | "base";
 
-const STORAGE_TOKEN = "sea_battle_token";
-const STORAGE_ADDRESS = "sea_battle_address";
-const STORAGE_LINEUP = "sea_battle_lineup";
-const STORAGE_SFX_ENABLED = "sea_battle_sfx_enabled";
-const ENTRY_RECEIVER = import.meta.env.VITE_ENTRY_RECEIVER || "0x782EB8568EEa9fC800B625E37A7cE486e92431E1";
+const DEMO_DAILY_MATCH_CAP = 5;
 const MONAD_CHAIN_HEX = (import.meta.env.VITE_MONAD_CHAIN_ID_HEX || "0x8f").toLowerCase();
 const MONAD_CHAIN_NAME = import.meta.env.VITE_MONAD_CHAIN_NAME || "Monad Mainnet";
 const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || "";
-const ENTRY_FEE_MON = import.meta.env.VITE_ENTRY_FEE_MON || "";
 const REOWN_PROJECT_ID = import.meta.env.VITE_REOWN_PROJECT_ID || "";
+
+type DemoDailyState = {
+  dayKey: string;
+  matchesPlayed: number;
+  resetAt: string;
+};
 
 export default function App() {
   const gameRef = useRef<PhaserGame | null>(null);
@@ -70,34 +73,14 @@ export default function App() {
   const [showMatchups, setShowMatchups] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [token, setToken] = useState<string | null>(
-    localStorage.getItem(STORAGE_TOKEN)
+    readStoredToken()
   );
   const [addressStored, setAddressStored] = useState<string | null>(
-    localStorage.getItem(STORAGE_ADDRESS)
+    readStoredAddress()
   );
   const [heroes, setHeroes] = useState<HeroType[]>([]);
   const [selectedHero, setSelectedHero] = useState<HeroType>("Shark");
-  const [selectedLineup, setSelectedLineupRaw] = useState<HeroType[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_LINEUP);
-      if (saved) {
-        const parsed = JSON.parse(saved) as HeroType[];
-        if (Array.isArray(parsed) && parsed.length === 3 && parsed.every(h => HEROES.includes(h))) {
-          return parsed;
-        }
-      }
-    } catch { /* ignore */ }
-    return HEROES;
-  });
-
-  // Wrapper that also persists lineup to localStorage
-  const setSelectedLineup = useCallback((lineup: HeroType[] | ((prev: HeroType[]) => HeroType[])) => {
-    setSelectedLineupRaw(prev => {
-      const next = typeof lineup === 'function' ? lineup(prev) : lineup;
-      localStorage.setItem(STORAGE_LINEUP, JSON.stringify(next));
-      return next;
-    });
-  }, []);
+  const [selectedLineup, setSelectedLineup] = useState<HeroType[]>(HEROES);
   const [activeLineupIndex, setActiveLineupIndex] = useState(0);
   const [preview, setPreview] = useState<MatchPreview | null>(null);
   const [resolution, setResolution] = useState<MatchResolution | null>(null);
@@ -118,14 +101,10 @@ export default function App() {
   const [resetTimer, setResetTimer] = useState<string>("");
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_SFX_ENABLED);
-    return saved == null ? true : saved === "1";
-  });
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [showWalletGate, setShowWalletGate] = useState(false);
-  const [entryTxHash, setEntryTxHash] = useState<string | null>(null);
   const [showStarterReveal, setShowStarterReveal] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [freezeFlow, setFreezeFlow] = useState(false);
@@ -145,11 +124,6 @@ export default function App() {
   const [showDailyChest, setShowDailyChest] = useState(false);
   const [dailyChestClaimed, setDailyChestClaimed] = useState(false);
   const [dailyChestRewards, setDailyChestRewards] = useState<RewardPayload | null>(null);
-  const [showBase, setShowBase] = useState(false);
-  const [baseState, setBaseState] = useState<BaseState | null>(null);
-  const [baseLoading, setBaseLoading] = useState(false);
-  const [baseError, setBaseError] = useState<string | null>(null);
-  const [collectMsg, setCollectMsg] = useState<string | null>(null);
   const [phaserReady, setPhaserReady] = useState(false);
   const [assetsReady, setAssetsReady] = useState(false);
   const [bgLoadProgress, setBgLoadProgress] = useState(0);
@@ -160,6 +134,74 @@ export default function App() {
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
   const [totalMonPool, setTotalMonPool] = useState("0");
+  const [baseState, setBaseState] = useState<BaseState | null>(null);
+  const [demoDailyState, setDemoDailyState] = useState<DemoDailyState>(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = `${now.getMonth() + 1}`.padStart(2, "0");
+    const day = `${now.getDate()}`.padStart(2, "0");
+    const next = new Date(now);
+    next.setHours(24, 0, 0, 0);
+    return { dayKey: `${year}-${month}-${day}`, matchesPlayed: 0, resetAt: next.toISOString() };
+  });
+
+  const getLocalDayKey = (date: Date) => {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, "0");
+    const day = `${date.getDate()}`.padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const getNextLocalMidnightIso = (date: Date) => {
+    const next = new Date(date);
+    next.setHours(24, 0, 0, 0);
+    return next.toISOString();
+  };
+
+  const readDemoDailyState = useCallback((atMs = Date.now()): DemoDailyState => {
+    const now = new Date(atMs);
+    const todayKey = getLocalDayKey(now);
+    const defaultState: DemoDailyState = {
+      dayKey: todayKey,
+      matchesPlayed: 0,
+      resetAt: getNextLocalMidnightIso(now)
+    };
+    if (demoDailyState.dayKey !== todayKey) {
+      return defaultState;
+    }
+    return {
+      dayKey: todayKey,
+      matchesPlayed: Math.max(0, Math.floor(Number(demoDailyState.matchesPlayed) || 0)),
+      resetAt: demoDailyState.resetAt || defaultState.resetAt
+    };
+  }, [demoDailyState]);
+
+  const writeDemoDailyState = useCallback((state: DemoDailyState) => {
+    setDemoDailyState(state);
+  }, []);
+
+  const getDemoMatchesLeft = useCallback((atMs = Date.now()) => {
+    const state = readDemoDailyState(atMs);
+    return Math.max(0, DEMO_DAILY_MATCH_CAP - state.matchesPlayed);
+  }, [readDemoDailyState]);
+
+  const consumeDemoMatch = useCallback((atMs = Date.now()) => {
+    const state = readDemoDailyState(atMs);
+    const leftBefore = Math.max(0, DEMO_DAILY_MATCH_CAP - state.matchesPlayed);
+    if (leftBefore <= 0) {
+      return { ok: false as const, matchesLeft: 0, resetAt: state.resetAt };
+    }
+    const nextState: DemoDailyState = {
+      ...state,
+      matchesPlayed: state.matchesPlayed + 1
+    };
+    writeDemoDailyState(nextState);
+    return {
+      ok: true as const,
+      matchesLeft: Math.max(0, DEMO_DAILY_MATCH_CAP - nextState.matchesPlayed),
+      resetAt: nextState.resetAt
+    };
+  }, [readDemoDailyState, writeDemoDailyState]);
 
   useEffect(() => {
     if (!gameRef.current) {
@@ -186,14 +228,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!devMode) return;
     const params = new URLSearchParams(window.location.search);
     const devFreeze = params.get("freeze") === "1";
     const devScreen = params.get("screen");
     if (devFreeze) setFreezeFlow(true);
-    if (devScreen === "menu" || devScreen === "pre" || devScreen === "battle") {
+    if (devScreen === "menu" || devScreen === "pre" || devScreen === "battle" || devScreen === "base") {
       setScreen(devScreen);
     }
-  }, []);
+  }, [devMode]);
 
   useEffect(() => {
     const handler = () => {
@@ -321,6 +364,9 @@ export default function App() {
     }
   }, [screen, phaserReady, resolution, startDevBattle]);
 
+  // Also include "base" in the condition for showing menu bg
+  // (handled by the className below)
+
   useEffect(() => {
     if (!phaserReady) return;
     if (screen === "battle" && resolution) {
@@ -336,7 +382,6 @@ export default function App() {
 
   useEffect(() => {
     setSfxEnabled(soundEnabled);
-    localStorage.setItem(STORAGE_SFX_ENABLED, soundEnabled ? "1" : "0");
   }, [soundEnabled]);
 
   useEffect(() => {
@@ -379,57 +424,59 @@ export default function App() {
     }
   };
 
-  const waitForReceipt = async (txHash: string, timeoutMs = 120000) => {
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      const receipt = await walletRequest("eth_getTransactionReceipt", [txHash]) as
-        | { status?: string }
-        | null;
-      if (receipt) {
-        if (receipt.status === "0x1") return;
-        throw new Error("Transaction reverted.");
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
-    throw new Error("Transaction confirmation timeout.");
-  };
-
   const ensureAuth = async () => {
     return Boolean(token);
   };
 
   const clearAuth = () => {
-    localStorage.removeItem(STORAGE_TOKEN);
-    localStorage.removeItem(STORAGE_ADDRESS);
+    clearStoredAuth();
     setToken(null);
     setAddressStored(null);
+    setBaseState(null);
+    setScreen("menu");
+    assertNoForbiddenStorageKeysDev("clear-auth");
   };
+
+  useEffect(() => {
+    const ethereum = (window as Window & {
+      ethereum?: {
+        on?: (event: string, handler: (...args: unknown[]) => void) => void;
+        removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
+      };
+    }).ethereum;
+    if (!ethereum?.on || !ethereum?.removeListener) return;
+
+    const onAccountsChanged = (accountsRaw: unknown) => {
+      const accounts = Array.isArray(accountsRaw) ? (accountsRaw as string[]) : [];
+      const nextAddress = normalizeWalletAddress(accounts[0] || "");
+      if (!nextAddress) {
+        clearAuth();
+        return;
+      }
+      if (addressStored && addressStored.toLowerCase() !== nextAddress.toLowerCase()) {
+        clearAuth();
+      }
+    };
+
+    ethereum.on("accountsChanged", onAccountsChanged);
+    return () => {
+      ethereum.removeListener?.("accountsChanged", onAccountsChanged);
+    };
+  }, [addressStored]);
 
   const loadState = useCallback(async (authToken?: string) => {
     const activeToken = authToken || token;
     if (!activeToken) return null;
     try {
       const state = await getState(activeToken);
+      const serverBase = await fetchBase(activeToken);
+      setBaseState(serverBase);
       setHeroes(state.heroes);
-      // Restore saved lineup if valid, otherwise build a default one
-      let restoredLineup: HeroType[] | null = null;
-      try {
-        const saved = localStorage.getItem(STORAGE_LINEUP);
-        if (saved) {
-          const parsed = JSON.parse(saved) as HeroType[];
-          if (Array.isArray(parsed) && parsed.length === 3 && parsed.every(h => HEROES.includes(h))) {
-            restoredLineup = parsed;
-          }
-        }
-      } catch { /* ignore */ }
-
-      if (!restoredLineup) {
-        const baseLineup = (state.heroes.length > 0 ? state.heroes : HEROES).slice(0, 3);
-        restoredLineup =
-          baseLineup.length === 3
-            ? baseLineup
-            : [...baseLineup, ...HEROES.filter((hero) => !baseLineup.includes(hero))].slice(0, 3);
-      }
+      const baseLineup = (state.heroes.length > 0 ? state.heroes : HEROES).slice(0, 3);
+      const restoredLineup =
+        baseLineup.length === 3
+          ? baseLineup
+          : [...baseLineup, ...HEROES.filter((hero) => !baseLineup.includes(hero))].slice(0, 3);
       setSelectedLineup(restoredLineup);
       if (restoredLineup.length > 0) {
         setSelectedHero(restoredLineup[0]);
@@ -446,6 +493,7 @@ export default function App() {
           setShowDailyChest(true);
         }
       }
+      assertNoForbiddenStorageKeysDev("load-state");
       return state;
     } catch (err) {
       const status = (err as { status?: number }).status;
@@ -470,65 +518,28 @@ export default function App() {
     setWalletBusy(true);
     setShowWalletGate(true);
     setWalletError(null);
-    setEntryTxHash(null);
     setErrorMsg(null);
     try {
-      if (!ENTRY_FEE_MON) {
-        throw new Error("Set VITE_ENTRY_FEE_MON before starting the game.");
-      }
-      const amountWei = monToWei(ENTRY_FEE_MON);
-      if (amountWei <= 0n) {
-        throw new Error("Entry fee must be greater than 0 MON.");
-      }
-
       await ensureMonadNetwork();
       const accounts = (await walletRequest("eth_requestAccounts")) as string[];
       const address = normalizeWalletAddress(accounts?.[0]);
       if (!address) throw new Error("Wallet is not connected.");
+      if (addressStored && addressStored.toLowerCase() !== address.toLowerCase()) {
+        clearAuth();
+      }
 
       const { message } = await fetchNonce(address);
       const signature = (await walletRequest("personal_sign", [message, address])) as string;
       const authRes = await login(address, signature);
-      localStorage.setItem(STORAGE_TOKEN, authRes.token);
-      localStorage.setItem(STORAGE_ADDRESS, authRes.address);
+      writeStoredAuth(authRes.token, authRes.address);
       setToken(authRes.token);
       setAddressStored(authRes.address);
-
-      let entryStatus: { paid: boolean; txHash: string | null } = {
-        paid: Boolean(authRes.entryPaid),
-        txHash: null
-      };
-      try {
-        const status = await fetchEntryStatus(authRes.token);
-        entryStatus = { paid: status.paid, txHash: status.txHash };
-      } catch {
-        // Do not auto-charge if status check is unavailable: safer to retry than risk a duplicate payment.
-        if (!entryStatus.paid) {
-          throw new Error("Failed to check entry status. Please retry to avoid duplicate payment.");
-        }
-      }
-      if (!entryStatus.paid) {
-        const txHash = (await walletRequest("eth_sendTransaction", [{
-          from: address,
-          to: ENTRY_RECEIVER,
-          value: `0x${amountWei.toString(16)}`
-        }])) as string;
-        setEntryTxHash(txHash);
-        await waitForReceipt(txHash);
-        await verifyEntryPayment(authRes.token, txHash, amountWei.toString());
-      } else if (entryStatus.txHash) {
-        setEntryTxHash(entryStatus.txHash);
-      }
+      assertNoForbiddenStorageKeysDev("post-login");
       closeWalletModal();
 
       const state = await loadState(authRes.token);
       if (!state) throw new Error("Failed to load player state.");
-
-      if (!state.hasOnboarded) {
-        setScreen("onboarding");
-      } else {
-        setScreen("pre");
-      }
+      setScreen("base");
       setShowWalletGate(false);
     } catch (err) {
       const msg = (err as Error)?.message || "Failed to start. Please try again.";
@@ -593,22 +604,45 @@ export default function App() {
       weather,
       playerLineup: lineup,
       opponentLineup,
-      matchesLeft: 5,
-      resetAt: ""
+      matchesLeft: getDemoMatchesLeft(),
+      resetAt: readDemoDailyState().resetAt
     };
-  }, [randomHero]);
+  }, [getDemoMatchesLeft, randomHero, readDemoDailyState]);
 
   const startDemo = () => {
     playSfx("buttonClick");
     const playerLineup = selectedLineup.length === 3 ? selectedLineup : HEROES;
+    const dailyState = readDemoDailyState();
+    const left = Math.max(0, DEMO_DAILY_MATCH_CAP - dailyState.matchesPlayed);
     setIsDemoMode(true);
     setResolution(null);
     setRewards(null);
     setShowRewardsModal(false);
-    setMatchesLeft(5);
-    setResetAt("");
+    setMatchesLeft(left);
+    setResetAt(dailyState.resetAt);
     setPreview(createDemoPreview(playerLineup));
     setScreen("pre");
+  };
+
+  const onPlayDemo = () => {
+    playSfx("buttonClick");
+    preloadSfx();
+    playMenuLoop();
+    setScreen("base");
+  };
+
+  const onTrenches = () => {
+    if (token) {
+      playSfx("buttonClick");
+      setIsDemoMode(false);
+      setErrorMsg(null);
+      setShowRewardsModal(false);
+      setRewards(null);
+      setResolution(null);
+      setScreen("pre");
+      return;
+    }
+    startDemo();
   };
 
   useEffect(() => {
@@ -624,6 +658,18 @@ export default function App() {
     });
   }, [isDemoMode, screen, selectedLineup, createDemoPreview]);
 
+  useEffect(() => {
+    if (!isDemoMode || screen !== "pre") return;
+    const syncDemoDaily = () => {
+      const dailyState = readDemoDailyState();
+      setMatchesLeft(Math.max(0, DEMO_DAILY_MATCH_CAP - dailyState.matchesPlayed));
+      setResetAt(dailyState.resetAt);
+    };
+    syncDemoDaily();
+    const timer = window.setInterval(syncDemoDaily, 30_000);
+    return () => window.clearInterval(timer);
+  }, [isDemoMode, screen, readDemoDailyState]);
+
   /** Wait for background assets to finish loading (resolves immediately if already done) */
   const waitForAssets = useCallback((): Promise<void> => {
     if (assetsReady) return Promise.resolve();
@@ -638,6 +684,10 @@ export default function App() {
 
   const onStartMatch = async () => {
     if (!preview) return;
+    if (matchesLeft <= 0) {
+      setErrorMsg(`No matches left today. Reset in ${resetTimer || "00:00:00"}`);
+      return;
+    }
     playSfx("buttonClick");
     setErrorMsg(null);
     setRewards(null);
@@ -645,6 +695,16 @@ export default function App() {
     setLoading(true);
     try {
       if (isDemoMode) {
+        const consumed = consumeDemoMatch();
+        if (!consumed.ok) {
+          setMatchesLeft(0);
+          setResetAt(consumed.resetAt);
+          setErrorMsg(`No matches left today. Reset in ${resetTimer || "00:00:00"}`);
+          setScreen("pre");
+          return;
+        }
+        setMatchesLeft(consumed.matchesLeft);
+        setResetAt(consumed.resetAt);
         const playerLineup = (selectedLineup.length === 3 ? selectedLineup : HEROES).slice(0, 3);
         const opponentLineup = preview.opponentLineup.slice(0, 3);
         const rounds: Array<{ playerHero: HeroType; opponentHero: HeroType; result: MatchResult }> = [];
@@ -674,8 +734,8 @@ export default function App() {
           opponentLineup,
           rounds,
           chestId: "demo",
-          matchesLeft: 5,
-          resetAt: ""
+          matchesLeft: consumed.matchesLeft,
+          resetAt: consumed.resetAt
         };
         setResolution(demoResolution);
         if (result === "win") {
@@ -828,68 +888,6 @@ export default function App() {
     setShowDailyChest(false);
     setDailyChestRewards(null);
     setDailyChestClaimed(false);
-  };
-
-  const openBase = async () => {
-    if (!token) {
-      const ok = await ensureAuth();
-      if (!ok) return;
-    }
-    setShowShop(false);
-    setShowInventory(false);
-    setShowLeaderboard(false);
-    setShowMatchups(false);
-    setShowBase(true);
-    setBaseError(null);
-    setBaseLoading(true);
-    setCollectMsg(null);
-    try {
-      const base = await fetchBase(token || "");
-      setBaseState(base);
-    } catch {
-      setBaseError("Failed to load base");
-    } finally {
-      setBaseLoading(false);
-    }
-  };
-
-  const onBuildOrUpgrade = async (buildingType: BuildingType) => {
-    if (!token) return;
-    setBaseLoading(true);
-    setBaseError(null);
-    try {
-      const res = await buildOrUpgrade(token, buildingType);
-      setBaseState(res.base);
-      setResources(res.resources);
-    } catch (err) {
-      setBaseError((err as Error).message || "Build failed");
-    } finally {
-      setBaseLoading(false);
-    }
-  };
-
-  const onCollectBase = async () => {
-    if (!token) return;
-    setBaseLoading(true);
-    setCollectMsg(null);
-    try {
-      const res = await collectBaseResources(token);
-      setBaseState(res.base);
-      setResources(res.resources);
-      const { shards, pearls } = res.collected;
-      if (shards > 0 || pearls > 0) {
-        const parts: string[] = [];
-        if (shards > 0) parts.push(`${shards} Shards`);
-        if (pearls > 0) parts.push(`${pearls} Pearls`);
-        setCollectMsg(`Collected: ${parts.join(", ")}!`);
-      } else {
-        setCollectMsg("Nothing to collect yet — check back later!");
-      }
-    } catch {
-      setBaseError("Collect failed");
-    } finally {
-      setBaseLoading(false);
-    }
   };
 
   const onBuyArtifact = async (artifactId: string) => {
@@ -1055,9 +1053,8 @@ export default function App() {
           <div className="modal-backdrop">
             <div className="modal">
               <h3>Wallet Checkpoint</h3>
-              <div className="hint">Connect wallet, sign in, and confirm MON payment to enter.</div>
-              {entryTxHash && <div className="hint">Tx: {entryTxHash.slice(0, 14)}…</div>}
-              {walletBusy && <div>Waiting for confirmation...</div>}
+              <div className="hint">Connect wallet and sign message to continue.</div>
+              {walletBusy && <div>Waiting for signature...</div>}
               {walletError && <div className="error-text">{walletError}</div>}
               {!walletBusy && (
                 <button className="primary" onClick={() => setShowWalletGate(false)}>
@@ -1067,43 +1064,17 @@ export default function App() {
             </div>
           </div>
         )}
+        {screen !== "base" && screen !== "menu" && (
         <div className="top-resource-bar">
           {!assetsReady && (
             <div className="bg-load-stripe" style={{ width: `${Math.round(bgLoadProgress * 100)}%` }} />
           )}
-          <div className="mon-pool-counter" title="Total MON prize pool">
-            <span className="mon-pool-label">PRIZE POOL</span>
-            <span className="mon-pool-value">{totalMonPool} MON</span>
-          </div>
           {addressStored && (
             <div className="player-tag">
               <span className="player-tag-icon">🐟</span>
               <span className="player-tag-name">{addressStored.slice(0, 10)}…</span>
             </div>
           )}
-          <div className="resource-group">
-            <span className="resource-item" title="Coins">
-              <img src="/assets/ui/Coins.avif" alt="Coins" className="resource-icon" />
-              {resources.coins}
-              {hudPopups.filter(p => p.type === "coins").map(p => (
-                <span key={p.id} className="hud-plus-popup">+{p.amount}</span>
-              ))}
-            </span>
-            <span className="resource-item" title="Pearls">
-              <img src="/assets/ui/Pearls.avif" alt="Pearls" className="resource-icon" />
-              {resources.pearls}
-              {hudPopups.filter(p => p.type === "pearls").map(p => (
-                <span key={p.id} className="hud-plus-popup">+{p.amount}</span>
-              ))}
-            </span>
-            <span className="resource-item" title="Shards">
-              <img src="/assets/ui/Shards.avif" alt="Shards" className="resource-icon" />
-              {resources.shards}
-              {hudPopups.filter(p => p.type === "shards").map(p => (
-                <span key={p.id} className="hud-plus-popup">+{p.amount}</span>
-              ))}
-            </span>
-          </div>
           <div className="streak-icons" aria-label={`Win streak ${winStreak} of 5`}>
             {Array.from({ length: 5 }).map((_, index) => (
               <img
@@ -1127,7 +1098,7 @@ export default function App() {
             <button className="ghost-button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>
               Inventory
             </button>
-            <button className="ghost-button" disabled style={{ opacity: 0.4, cursor: 'not-allowed' }}>
+            <button className="ghost-button" onClick={() => setScreen("base")}>
               Base
             </button>
             <button className="ghost-button" onClick={() => setSoundEnabled((prev) => !prev)}>
@@ -1135,13 +1106,21 @@ export default function App() {
             </button>
           </div>
         </div>
+        )}
+
+        {screen === "base" && (
+          <BaseScreenServer
+            token={token}
+            resources={resources}
+            onResourcesUpdate={setResources}
+            onBack={() => setScreen("menu")}
+            onTrenches={onTrenches}
+          />
+        )}
 
         {screen === "menu" && (
           <div className="screen center menu-screen">
-            <button className="primary big start-button" onClick={onPlay} disabled={loading}>
-            </button>
-            <button className="ghost-button" onClick={startDemo} disabled={loading}>
-              Demo
+            <button className="primary big start-button" onClick={onPlayDemo} disabled={loading}>
             </button>
             {errorMsg && <div className="hint error-text">{errorMsg}</div>}
           </div>
@@ -1260,7 +1239,7 @@ export default function App() {
                     <button
                       className="primary big center-button match-info-start match-start-button"
                       onClick={onStartMatch}
-                      disabled={!isDemoMode && (matchesLeft <= 0 || !preview)}
+                      disabled={matchesLeft <= 0 || !preview}
                     >
                     </button>
                     {errorMsg && <div className="hint error-text">{errorMsg}</div>}
@@ -1285,7 +1264,6 @@ export default function App() {
             )}
           </div>
         )}
-
 
         {showRewardsModal && !rewards && (
           <div className="chest-float">
@@ -1614,92 +1592,6 @@ export default function App() {
         </div>
       )}
 
-      {showBase && (
-        <div className="modal-backdrop" onClick={() => { playSfx("modalClose"); setShowBase(false); }}>
-          <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-            <h3>🏗️ Base</h3>
-            <div className="hint">Build structures to produce resources. Shards can only be earned here!</div>
-            {baseLoading && <div>Loading...</div>}
-            {baseError && <div className="error-text">{baseError}</div>}
-            {collectMsg && <div className="collect-msg">{collectMsg}</div>}
-            {!baseLoading && baseState && (
-              <>
-                <div className="base-actions">
-                  <button className="primary small" onClick={onCollectBase} disabled={baseLoading}>
-                    Collect All Resources
-                  </button>
-                </div>
-                <div className="base-grid">
-                  {BUILDINGS.map((def) => {
-                    const built = baseState.buildings.find((b) => b.buildingType === def.id);
-                    const level = built?.level || 0;
-                    const isMaxLevel = level >= def.maxLevel;
-                    const nextCost = level < def.maxLevel ? def.costs[level] : null;
-                    const canAfford = nextCost
-                      ? resources.coins >= nextCost.coins && resources.pearls >= nextCost.pearls
-                      : false;
-                    const rate = level > 0 ? def.productionPerHour[level - 1] : 0;
-
-                    // Time since last collected
-                    let accumInfo = "";
-                    if (built && def.produces !== "buff" && rate > 0) {
-                      const elapsed = (Date.now() - new Date(built.lastCollectedAt).getTime()) / 3600000;
-                      const accum = Math.floor(rate * Math.min(elapsed, 4));
-                      accumInfo = `Accumulated: ~${accum} ${def.produces}`;
-                    }
-
-                    return (
-                      <div key={def.id} className={`base-card ${level > 0 ? "built" : ""}`}>
-                        <div className="base-card-header">
-                          <span className="base-name">{def.name}</span>
-                          {level > 0 && <span className="base-level">Lv.{level}</span>}
-                        </div>
-                        <div className="base-desc">{def.description}</div>
-                        {level > 0 && def.produces !== "buff" && (
-                          <div className="base-rate">
-                            ⚡ {rate} {def.produces}/hr
-                          </div>
-                        )}
-                        {level > 0 && def.produces === "buff" && def.id === "training_reef" && (
-                          <div className="base-rate">🎯 +{level} Piercing Level</div>
-                        )}
-                        {level > 0 && def.id === "storage_vault" && (
-                          <div className="base-rate">📦 Max accumulation: {4 + level * 2}h</div>
-                        )}
-                        {accumInfo && <div className="base-accum">{accumInfo}</div>}
-                        {!isMaxLevel && nextCost && (
-                          <div className="base-footer">
-                            <span className="base-cost">
-                              {nextCost.coins > 0 && `${nextCost.coins} 🪙`}
-                              {nextCost.pearls > 0 && ` ${nextCost.pearls} 🫧`}
-                            </span>
-                            <button
-                              className="primary small"
-                              onClick={() => onBuildOrUpgrade(def.id)}
-                              disabled={baseLoading || !canAfford}
-                            >
-                              {level === 0 ? "Build" : "Upgrade"}
-                            </button>
-                          </div>
-                        )}
-                        {isMaxLevel && (
-                          <div className="base-footer">
-                            <span className="base-cost">MAX LEVEL</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-            <button className="primary" onClick={() => { playSfx("modalClose"); setShowBase(false); }}>
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
       {showStarterReveal && (
         <div className="modal-backdrop" onClick={() => { playSfx("modalClose"); setShowStarterReveal(false); }}>
           <div className="modal wide" onClick={(e) => e.stopPropagation()}>
@@ -1725,30 +1617,6 @@ export default function App() {
           ))}
         </div>
       )}
-      {devMode && (
-        <div className="dev-panel">
-          <div className="dev-title">Dev Panel</div>
-          <div className="dev-row">
-            <button className="ghost-button" onClick={() => setScreen("menu")}>
-              Menu
-            </button>
-            <button className="ghost-button" onClick={() => setScreen("pre")}>
-              Pre
-            </button>
-            <button className="ghost-button" onClick={() => setScreen("battle")}>
-              Battle
-            </button>
-          </div>
-          <label className="dev-toggle">
-            <input
-              type="checkbox"
-              checked={freezeFlow}
-              onChange={(e) => setFreezeFlow(e.target.checked)}
-            />
-            Freeze flow
-          </label>
-        </div>
-      )}
         </div>
     </div>
   );
@@ -1771,18 +1639,6 @@ function getWeatherImageUrl(weatherId: WeatherType) {
     default:
       return encodeURI("/assets/weather/SUNLIT SHALLOWS.avif");
   }
-}
-
-function monToWei(amountMon: string): bigint {
-  const value = amountMon.trim();
-  if (!/^\d+(\.\d+)?$/.test(value)) {
-    throw new Error("Invalid VITE_ENTRY_FEE_MON format.");
-  }
-  const [wholeRaw, fracRaw = ""] = value.split(".");
-  const whole = wholeRaw || "0";
-  const frac = (fracRaw + "0".repeat(18)).slice(0, 18);
-  const wei = BigInt(whole) * 10n ** 18n + BigInt(frac);
-  return wei;
 }
 
 function normalizeWalletAddress(raw?: string): string {

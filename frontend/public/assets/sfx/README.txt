@@ -12,14 +12,14 @@ UI:
   modal_close.mp3     — close modal +
 
 Match Flow:
-  match_start.mp3     — battle screen appears
-  round_start.mp3     — each round begins
-  hero_fly.mp3        — hero starts flying
+  match_start.mp3     — battle screen appears +
+  round_start.mp3     — each round begins +
+  hero_fly.mp3        — hero starts flying +
   impact.mp3          — heroes collide (BANG!) +
-  round_win.mp3       — round won
-  round_lose.mp3      — round lost
-  match_win.mp3       — entire match won
-  match_lose.mp3      — entire match lost
+  round_win.mp3       — round won +
+  round_lose.mp3      — round lost +
+  match_win.mp3       — entire match won +
+  match_lose.mp3      — entire match lost +
   hero_defeated.mp3   — defeated hero flies to corner
 
 Chest & Rewards:

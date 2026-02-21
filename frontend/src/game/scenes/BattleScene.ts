@@ -237,6 +237,9 @@ export class BattleScene extends Phaser.Scene {
     const h = this.scale.height || this.game.scale.height;
     const s = this.getViewportScale();
     const compactLandscape = h < 560;
+    const isDesktop =
+      typeof window.matchMedia === "function" && !window.matchMedia("(pointer: coarse)").matches;
+    const desktopHeroBoost = isDesktop ? 1.2 : 1;
     return {
       width: w,
       height: h,
@@ -251,7 +254,7 @@ export class BattleScene extends Phaser.Scene {
       playerCornerX: w * 0.06,
       opponentCornerX: w * 0.94,
       cornerY: compactLandscape ? h * 0.8 : h * 0.85,
-      heroHeight: this.tuning.heroHeight * s * 0.8,
+      heroHeight: this.tuning.heroHeight * s * 0.8 * desktopHeroBoost,
       offscreenX: Math.round(220 * s),
       defeatedStackStep: Math.round(54 * s)
     };

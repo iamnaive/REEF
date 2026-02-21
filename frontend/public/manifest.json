@@ -1,10 +1,10 @@
 {
-  "name": "Sea Battle",
-  "short_name": "SeaBattle",
-  "description": "Sea Battle – PvP strategy game",
+  "name": "Reef Rumble",
+  "short_name": "ReefRumble",
+  "description": "Reef Rumble base management game",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#05070f",
   "theme_color": "#05070f",
   "icons": [

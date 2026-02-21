@@ -54,6 +54,13 @@ const fadeTimers: Partial<Record<SfxKey, ReturnType<typeof setInterval>>> = {};
 let sfxEnabled = true;
 let sfxVolume = 0.5;
 let menuAudio: HTMLAudioElement | null = null;
+let menuAudioCtx: AudioContext | null = null;
+let menuBuffer: AudioBuffer | null = null;
+let menuLoopRange: { start: number; end: number } | null = null;
+let menuGain: GainNode | null = null;
+let menuSource: AudioBufferSourceNode | null = null;
+let menuFadeRaf: number | null = null;
+let menuTargetVolume = 0.35;
 
 function clearFadeTimer(key: SfxKey) {
   const timer = fadeTimers[key];
@@ -62,10 +69,108 @@ function clearFadeTimer(key: SfxKey) {
   delete fadeTimers[key];
 }
 
+function stopMenuWebAudio() {
+  if (menuFadeRaf != null) {
+    cancelAnimationFrame(menuFadeRaf);
+    menuFadeRaf = null;
+  }
+  if (menuSource) {
+    try {
+      menuSource.stop();
+    } catch {
+      // ignore
+    }
+    menuSource.disconnect();
+    menuSource = null;
+  }
+}
+
+function getOrCreateAudioContext() {
+  if (typeof window === "undefined" || (window.AudioContext == null && (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext == null)) {
+    return null;
+  }
+  if (!menuAudioCtx) {
+    const Ctx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return null;
+    menuAudioCtx = new Ctx();
+  }
+  return menuAudioCtx;
+}
+
+function computeLoopRange(buffer: AudioBuffer) {
+  const sampleRate = buffer.sampleRate;
+  const maxTrimSec = 2;
+  const threshold = 0.0008;
+  const channelData = buffer.getChannelData(0);
+  const maxTrimSamples = Math.min(channelData.length - 1, Math.floor(maxTrimSec * sampleRate));
+
+  let startTrim = 0;
+  while (startTrim < maxTrimSamples && Math.abs(channelData[startTrim]) < threshold) {
+    startTrim += 1;
+  }
+
+  let endTrim = 0;
+  while (endTrim < maxTrimSamples && Math.abs(channelData[channelData.length - 1 - endTrim]) < threshold) {
+    endTrim += 1;
+  }
+
+  const start = startTrim / sampleRate;
+  const end = Math.max(start + 0.05, buffer.duration - endTrim / sampleRate);
+  return { start, end };
+}
+
+async function ensureMenuBuffer() {
+  if (menuBuffer) return menuBuffer;
+  const ctx = getOrCreateAudioContext();
+  if (!ctx) return null;
+  const res = await fetch(SFX_BASE + SFX.menuLoop);
+  const arr = await res.arrayBuffer();
+  menuBuffer = await ctx.decodeAudioData(arr.slice(0));
+  menuLoopRange = computeLoopRange(menuBuffer);
+  return menuBuffer;
+}
+
+async function startMenuWebAudioLoop(volume: number) {
+  const ctx = getOrCreateAudioContext();
+  if (!ctx) return false;
+  if (ctx.state === "suspended") {
+    await ctx.resume();
+  }
+  const buffer = await ensureMenuBuffer();
+  if (!buffer) return false;
+
+  stopMenuWebAudio();
+  menuTargetVolume = Math.max(0, Math.min(1, volume));
+
+  if (!menuGain) {
+    menuGain = ctx.createGain();
+    menuGain.connect(ctx.destination);
+  }
+  menuGain.gain.setValueAtTime(menuTargetVolume, ctx.currentTime);
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  if (menuLoopRange) {
+    source.loopStart = menuLoopRange.start;
+    source.loopEnd = menuLoopRange.end;
+  }
+  source.connect(menuGain);
+  source.onended = () => {
+    if (menuSource === source) {
+      menuSource = null;
+    }
+  };
+  source.start(0, menuLoopRange?.start ?? 0);
+  menuSource = source;
+  return true;
+}
+
 /** Enable or disable all sound effects */
 export function setSfxEnabled(enabled: boolean) {
   sfxEnabled = enabled;
   if (!enabled) {
+    stopMenuWebAudio();
     for (const key of Object.keys(SFX) as SfxKey[]) {
       clearFadeTimer(key);
       const audio = audioCache[key];
@@ -117,13 +222,28 @@ export function playMenuLoop(volume = 0.35) {
   if (!sfxEnabled) return;
   const filename = SFX.menuLoop;
   if (!filename) return;
+  menuTargetVolume = Math.max(0, Math.min(1, volume));
+
+  // Prefer WebAudio for a tighter seamless loop.
+  const ctx = getOrCreateAudioContext();
+  if (ctx) {
+    if (menuSource && menuGain) {
+      menuGain.gain.setValueAtTime(menuTargetVolume, ctx.currentTime);
+      return;
+    }
+    void startMenuWebAudioLoop(menuTargetVolume).catch(() => {
+      // Fall back to HTMLAudio below if WebAudio fails.
+    });
+    return;
+  }
+
   try {
     if (!menuAudio) {
       menuAudio = new Audio(SFX_BASE + filename);
       menuAudio.loop = true;
       menuAudio.preload = "auto";
     }
-    menuAudio.volume = Math.max(0, Math.min(1, volume));
+    menuAudio.volume = menuTargetVolume;
     if (menuAudio.paused) {
       menuAudio.play().catch(() => {
         // Browser may block autoplay until user interaction
@@ -136,6 +256,34 @@ export function playMenuLoop(volume = 0.35) {
 
 /** Fade out menu loop quickly and stop playback. */
 export function fadeOutMenuLoop(durationMs = 250) {
+  if (menuSource && menuGain && menuAudioCtx) {
+    if (menuFadeRaf != null) {
+      cancelAnimationFrame(menuFadeRaf);
+      menuFadeRaf = null;
+    }
+    if (durationMs <= 0) {
+      stopMenuWebAudio();
+      return;
+    }
+    const startAt = performance.now();
+    const startVolume = menuGain.gain.value;
+    const tick = () => {
+      if (!menuGain) return;
+      const p = Math.min(1, (performance.now() - startAt) / durationMs);
+      menuGain.gain.setValueAtTime(Math.max(0, startVolume * (1 - p)), menuAudioCtx!.currentTime);
+      if (p >= 1) {
+        stopMenuWebAudio();
+        if (menuGain && menuAudioCtx) {
+          menuGain.gain.setValueAtTime(menuTargetVolume, menuAudioCtx.currentTime);
+        }
+        return;
+      }
+      menuFadeRaf = requestAnimationFrame(tick);
+    };
+    menuFadeRaf = requestAnimationFrame(tick);
+    return;
+  }
+
   if (!menuAudio || menuAudio.paused) return;
   if (durationMs <= 0) {
     menuAudio.pause();

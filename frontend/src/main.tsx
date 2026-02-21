@@ -3,18 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./styles.css";
 import { ResourceProvider } from "./resources";
-
-const MAINTENANCE_MODE = true;
-
-function MaintenanceScreen() {
-  return (
-    <div className="maintenance-root" role="status" aria-live="polite">
-      <div className="maintenance-tape">
-        <span>UNDER MAINTENANCE</span>
-      </div>
-    </div>
-  );
-}
+import { installStorageWriteGuardDev } from "./auth/storage";
 
 /* ── iOS Safari viewport height fix ──
  * On mobile Safari the toolbar slides in/out, making CSS `100vh` unreliable.
@@ -29,6 +18,7 @@ function setAppViewport() {
   document.documentElement.style.setProperty("--app-width", `${Math.round(width)}px`);
 }
 setAppViewport();
+installStorageWriteGuardDev();
 window.addEventListener("resize", setAppViewport);
 window.addEventListener("orientationchange", () => setTimeout(setAppViewport, 150));
 window.visualViewport?.addEventListener("resize", setAppViewport);
@@ -100,7 +90,14 @@ function isExtensionNoise(input: unknown): boolean {
       : ((input as { stack?: string; message?: string } | undefined)?.stack ||
         (input as { message?: string } | undefined)?.message ||
         String(input || ""));
-  return text.includes("chrome-extension://") || text.includes("moz-extension://");
+  if (text.includes("chrome-extension://") || text.includes("moz-extension://")) return true;
+  // Phaser WebGL can emit transient framebuffer resize errors on some setups.
+  // They should not hard-crash the whole React UI layer.
+  if (text.includes("Framebuffer status: Incomplete Attachment")) return true;
+  // Can happen during rapid React teardown/remount in dev; avoid replacing the whole app with fatal screen.
+  if (text.includes("Failed to execute 'removeChild' on 'Node'")) return true;
+  if (text.includes("NotFoundError: Failed to execute 'removeChild' on 'Node'")) return true;
+  return false;
 }
 
 window.addEventListener("error", (event) => {
@@ -120,15 +117,18 @@ window.addEventListener("unhandledrejection", (event) => {
 try {
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-      {MAINTENANCE_MODE ? (
-        <MaintenanceScreen />
-      ) : (
-        <ResourceProvider>
-          <App />
-        </ResourceProvider>
-      )}
+      <ResourceProvider>
+        <App />
+      </ResourceProvider>
     </React.StrictMode>
   );
+  if (import.meta.env.PROD && "serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        // Service worker registration failure is non-fatal.
+      });
+    });
+  }
 } catch (error) {
   const message = (error as { stack?: string; message?: string })?.stack || (error as Error)?.message || "Unknown startup error";
   renderFatal(`Startup error:\n${message}`);
