@@ -1096,11 +1096,8 @@ async function requireAuth(request: Request, env: Env) {
 }
 
 async function requirePaidAuth(request: Request, env: Env) {
-  const auth = await requireAuth(request, env);
-  if (!auth) return null;
-  const paid = await hasVerifiedEntryPayment(env, auth.address);
-  if (!paid) return null;
-  return auth;
+  // Payment gate disabled: wallet signature auth is enough.
+  return requireAuth(request, env);
 }
 
 function parseRequiredEntryFeeWei(env: Env): bigint {
