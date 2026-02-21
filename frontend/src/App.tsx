@@ -129,7 +129,6 @@ export default function App() {
   const [phaserReady, setPhaserReady] = useState(false);
   const [assetsReady, setAssetsReady] = useState(false);
   const [bgLoadProgress, setBgLoadProgress] = useState(0);
-  const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardTotal, setLeaderboardTotal] = useState(0);
   const [leaderboardMyEntry, setLeaderboardMyEntry] = useState<LeaderboardEntry | null>(null);
@@ -981,25 +980,6 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const updateOrientation = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const isPortrait = height > width;
-      const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
-      const isMobileWidth = Math.min(width, height) <= 900;
-      setIsMobilePortrait(isPortrait && isCoarsePointer && isMobileWidth);
-    };
-
-    updateOrientation();
-    window.addEventListener("resize", updateOrientation);
-    window.addEventListener("orientationchange", updateOrientation);
-    return () => {
-      window.removeEventListener("resize", updateOrientation);
-      window.removeEventListener("orientationchange", updateOrientation);
-    };
-  }, []);
-
   const weatherLabel = preview
     ? `${preview.weather.name} (+${Math.round(preview.weather.bonus * 100)}%)`
     : "Unknown";
@@ -1026,7 +1006,7 @@ export default function App() {
     (shopItems.length ? shopItems : ARTIFACTS).find((artifact) => artifact.id === artifactId);
 
   return (
-    <div className={`app ${screen !== "battle" ? "show-menu-bg" : ""} ${isMobilePortrait ? "mobile-portrait" : "mobile-landscape"}`}>
+    <div className={`app ${screen !== "battle" ? "show-menu-bg" : ""}`}>
       <div className="menu-bg" />
       <div id="game-root" className="game-root" />
       <div className="bubbles-layer" aria-hidden="true">
@@ -1056,15 +1036,6 @@ export default function App() {
       </div>
       <div className="ui-layer">
         <div className="ui-content">
-        {isMobilePortrait && (
-          <div className="orientation-overlay" role="dialog" aria-live="polite">
-            <div className="orientation-card">
-              <div className="orientation-icon" aria-hidden="true">📱↻</div>
-              <div className="orientation-title">Rotate Device</div>
-              <div className="hint">For best gameplay, use landscape mode.</div>
-            </div>
-          </div>
-        )}
         {showWalletGate && (
           <div className="modal-backdrop">
             <div className="modal">
