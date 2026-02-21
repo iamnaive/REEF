@@ -36,7 +36,6 @@ import {
   clearDebuffs,
   pruneExpiredDebuffs,
   removeDebuff,
-  saveMechanicsState,
   tickThreats,
   tryUseAction,
   type DebuffId,
@@ -47,7 +46,6 @@ import {
   clampResourcesToCaps,
   getDayIndex,
   loadResourceState,
-  saveResourceState,
   setPassiveRatesFromPlacements,
   spend,
   tickResources,
@@ -63,6 +61,7 @@ import {
 } from "../events/SwarmEventSystem";
 import { SwarmLayer } from "./SwarmLayer";
 import { SwarmFinishOverlay } from "./SwarmFinishOverlay";
+import { ApiRequestError, getBaseStateBlob, setBaseStateBlob } from "../api";
 
 type BaseCell = BaseCellLayout;
 
@@ -113,15 +112,10 @@ type FloatingCashHit = {
 };
 
 type BaseScreenProps = {
+  token: string | null;
   onBack: () => void;
   onTrenches: () => void;
 };
-
-const STORAGE_CELLS_KEY = "rr_base_cells_v1";
-const STORAGE_PLACEMENTS_KEY = "rr_base_placements_v1";
-const STORAGE_BUILDING_VISUAL_KEY = "rr_building_visual_v1";
-const STORAGE_BUILD_QUEUE_KEY = "rr_base_queue_v1";
-const STORAGE_BUILD_QUEUE_KEY_LEGACY = "rr_base_build_queue_v1";
 const BASE_QUEUE_LIMIT = 1;
 const BUILDING_BASE_SIZE_MAP_UNITS = 180;
 const THREAT_ORDER: DebuffId[] = ["fuders", "kol_shills"];
@@ -299,6 +293,86 @@ function parseStoredBuildQueue(raw: string | null): BuildQueueState | null {
   }
 }
 
+type BaseStateBlobPayload = {
+  version: 1;
+  cells: BaseCell[];
+  placements: Record<CellId, Placement | null>;
+  buildingVisuals: Record<BuildingId, BuildingVisual>;
+  buildQueue: BuildQueueState;
+  resourceState: ResourceState;
+  mechanicsState: MechanicsState;
+};
+
+function parseResourceStateCandidate(candidate: unknown): ResourceState | null {
+  if (!candidate || typeof candidate !== "object") return null;
+  const value = candidate as {
+    res?: Partial<ResourceState["res"]>;
+    startedAtMs?: number;
+    lastTickMs?: number;
+  };
+  if (typeof value.startedAtMs !== "number" || typeof value.lastTickMs !== "number") return null;
+  if (!value.res || typeof value.res !== "object") return null;
+  const res = value.res;
+  const keys: Array<keyof ResourceState["res"]> = ["cash", "yield", "alpha", "tickets", "mon", "faith"];
+  for (const key of keys) {
+    if (typeof res[key] !== "number") return null;
+  }
+  return {
+    startedAtMs: value.startedAtMs,
+    lastTickMs: value.lastTickMs,
+    res: {
+      cash: res.cash as number,
+      yield: res.yield as number,
+      alpha: res.alpha as number,
+      tickets: res.tickets as number,
+      mon: res.mon as number,
+      faith: res.faith as number
+    }
+  };
+}
+
+function parseBlobState(raw: unknown): BaseStateBlobPayload | null {
+  if (!raw || typeof raw !== "object") return null;
+  const candidate = raw as {
+    version?: number;
+    cells?: unknown;
+    placements?: unknown;
+    buildingVisuals?: unknown;
+    buildQueue?: unknown;
+    resourceState?: unknown;
+    mechanicsState?: unknown;
+  };
+  if (candidate.version !== 1) return null;
+  const cells = parseStoredCells(JSON.stringify(candidate.cells));
+  const placements = parseStoredPlacements(JSON.stringify(candidate.placements));
+  const buildingVisuals = parseStoredBuildingVisuals(JSON.stringify(candidate.buildingVisuals));
+  const buildQueue = parseStoredBuildQueue(JSON.stringify(candidate.buildQueue));
+  const resourceState = parseResourceStateCandidate(candidate.resourceState);
+  const mechanicsState = clearDebuffs((candidate.mechanicsState as MechanicsState) ?? loadMechanicsState());
+  if (!cells || !placements || !buildingVisuals || !buildQueue || !resourceState) return null;
+  return {
+    version: 1,
+    cells,
+    placements,
+    buildingVisuals,
+    buildQueue,
+    resourceState,
+    mechanicsState
+  };
+}
+
+function toBlobState(payload: BaseStateBlobPayload): Record<string, unknown> {
+  return {
+    version: 1,
+    cells: payload.cells,
+    placements: payload.placements,
+    buildingVisuals: payload.buildingVisuals,
+    buildQueue: payload.buildQueue,
+    resourceState: payload.resourceState,
+    mechanicsState: payload.mechanicsState
+  };
+}
+
 function applyCompletedJobsToPlacements(
   source: Record<CellId, Placement | null>,
   completedJobs: BuildJob[]
@@ -421,7 +495,7 @@ function getNextTier(tier: Tier): Tier | null {
   return null;
 }
 
-export function BaseScreen({ onBack, onTrenches }: BaseScreenProps) {
+export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
   const devMode = import.meta.env.DEV;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
@@ -444,20 +518,10 @@ export function BaseScreen({ onBack, onTrenches }: BaseScreenProps) {
   } | null>(null);
 
   const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
-  const [cells, setCells] = useState<BaseCell[]>(() => {
-    const fromStorage = parseStoredCells(localStorage.getItem(STORAGE_CELLS_KEY));
-    return fromStorage ?? cloneCells(BASE_CELL_DEFAULTS);
-  });
-  const [placements, setPlacements] = useState<Record<CellId, Placement | null>>(() => {
-    return parseStoredPlacements(localStorage.getItem(STORAGE_PLACEMENTS_KEY)) ?? createDefaultPlacements();
-  });
-  const [buildingVisuals, setBuildingVisuals] = useState<Record<BuildingId, BuildingVisual>>(() => {
-    return parseStoredBuildingVisuals(localStorage.getItem(STORAGE_BUILDING_VISUAL_KEY)) ?? createDefaultBuildingVisuals();
-  });
-  const [buildQueue, setBuildQueue] = useState<BuildQueueState>(() => {
-    const raw = localStorage.getItem(STORAGE_BUILD_QUEUE_KEY) ?? localStorage.getItem(STORAGE_BUILD_QUEUE_KEY_LEGACY);
-    return parseStoredBuildQueue(raw) ?? { active: null, queued: [] };
-  });
+  const [cells, setCells] = useState<BaseCell[]>(() => cloneCells(BASE_CELL_DEFAULTS));
+  const [placements, setPlacements] = useState<Record<CellId, Placement | null>>(() => createDefaultPlacements());
+  const [buildingVisuals, setBuildingVisuals] = useState<Record<BuildingId, BuildingVisual>>(() => createDefaultBuildingVisuals());
+  const [buildQueue, setBuildQueue] = useState<BuildQueueState>(() => ({ active: null, queued: [] }));
   const [tickNowMs, setTickNowMs] = useState<number>(() => nowMs());
   const [chargesFlash, setChargesFlash] = useState(false);
   const [resourceState, setResourceState] = useState<ResourceState>(() => loadResourceState());
@@ -491,7 +555,10 @@ export function BaseScreen({ onBack, onTrenches }: BaseScreenProps) {
   const [impactPulseUntilByCell, setImpactPulseUntilByCell] = useState<Record<string, number>>({});
   const [floatingCashHits, setFloatingCashHits] = useState<FloatingCashHit[]>([]);
   const [jamPulse, setJamPulse] = useState(false);
-  const hydratedRef = useRef(false);
+  const isServerHydratedRef = useRef(false);
+  const lastServerUpdatedAtRef = useRef<string | null>(null);
+  const saveBlobTimerRef = useRef<number | null>(null);
+  const saveInFlightRef = useRef(false);
   const prevTierByCellRef = useRef<Record<string, Tier | undefined>>({});
   const tierWatchReadyRef = useRef(false);
   const prevResRef = useRef(resourceState.res);
@@ -529,6 +596,9 @@ export function BaseScreen({ onBack, onTrenches }: BaseScreenProps) {
     return () => {
       fxTimerRef.current.forEach((timerId) => window.clearTimeout(timerId));
       shineTimerRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      if (saveBlobTimerRef.current != null) {
+        window.clearTimeout(saveBlobTimerRef.current);
+      }
     };
   }, []);
 
@@ -541,63 +611,121 @@ export function BaseScreen({ onBack, onTrenches }: BaseScreenProps) {
   }, [toasts]);
 
   useEffect(() => {
-    if (hydratedRef.current) return;
-    hydratedRef.current = true;
-    const now = nowMs();
-    const cellsLoaded = parseStoredCells(localStorage.getItem(STORAGE_CELLS_KEY)) ?? cloneCells(BASE_CELL_DEFAULTS);
-    const placementsLoaded = parseStoredPlacements(localStorage.getItem(STORAGE_PLACEMENTS_KEY)) ?? createDefaultPlacements();
-    setPassiveRatesFromPlacements(placementsLoaded);
-    const resourcesLoaded = tickResources(loadResourceState(), now);
-    const queueRaw = localStorage.getItem(STORAGE_BUILD_QUEUE_KEY) ?? localStorage.getItem(STORAGE_BUILD_QUEUE_KEY_LEGACY);
-    const queueLoaded = parseStoredBuildQueue(queueRaw) ?? { active: null, queued: [] };
-    const queueTicked = tick(queueLoaded, now);
-    const placementsAfterQueue = applyCompletedJobsToPlacements(placementsLoaded, queueTicked.completed);
-    setPassiveRatesFromPlacements(placementsAfterQueue);
-    const mechanicsLoaded = clearDebuffs(loadMechanicsState());
-    const mechanicsPruned = pruneExpiredDebuffs(mechanicsLoaded, now);
-    const mechanicsTicked = tickThreats(now, getDayIndex(resourcesLoaded, now), placementsAfterQueue, mechanicsPruned);
-    setCells(cellsLoaded);
-    setPlacements(placementsAfterQueue);
-    setBuildQueue(queueTicked.state);
-    setResourceState(resourcesLoaded);
-    setMechanicsState(mechanicsTicked);
-    setTickNowMs(now);
-  }, []);
+    let cancelled = false;
+    const bootstrap = async () => {
+      const now = nowMs();
+      const baseDefaultCells = cloneCells(BASE_CELL_DEFAULTS);
+      const baseDefaultPlacements = createDefaultPlacements();
+      const baseDefaultQueue: BuildQueueState = { active: null, queued: [] };
+      const baseDefaultResources = tickResources(loadResourceState(), now);
+      const baseDefaultMechanics = clearDebuffs(loadMechanicsState());
+
+      let sourceCells = baseDefaultCells;
+      let sourcePlacements = baseDefaultPlacements;
+      let sourceBuildingVisuals = createDefaultBuildingVisuals();
+      let sourceQueue = baseDefaultQueue;
+      let sourceResources = baseDefaultResources;
+      let sourceMechanics = baseDefaultMechanics;
+
+      if (token) {
+        try {
+          const blob = await getBaseStateBlob(token);
+          lastServerUpdatedAtRef.current = blob.updatedAt;
+          const parsed = blob.stateJson ? parseBlobState(blob.stateJson) : null;
+          if (parsed) {
+            sourceCells = parsed.cells;
+            sourcePlacements = parsed.placements;
+            sourceBuildingVisuals = parsed.buildingVisuals;
+            sourceQueue = parsed.buildQueue;
+            sourceResources = parsed.resourceState;
+            sourceMechanics = parsed.mechanicsState;
+          }
+        } catch (error) {
+          console.warn("[BaseScreen] failed to load server blob state", error);
+        }
+      }
+
+      setPassiveRatesFromPlacements(sourcePlacements);
+      const queueTicked = tick(sourceQueue, now);
+      const placementsAfterQueue = applyCompletedJobsToPlacements(sourcePlacements, queueTicked.completed);
+      setPassiveRatesFromPlacements(placementsAfterQueue);
+      const resourcesLoaded = tickResources(sourceResources, now);
+      const mechanicsPruned = pruneExpiredDebuffs(sourceMechanics, now);
+      const mechanicsTicked = tickThreats(now, getDayIndex(resourcesLoaded, now), placementsAfterQueue, mechanicsPruned);
+
+      if (cancelled) return;
+      setCells(sourceCells);
+      setPlacements(placementsAfterQueue);
+      setBuildingVisuals(sourceBuildingVisuals);
+      setBuildQueue(queueTicked.state);
+      setResourceState(resourcesLoaded);
+      setMechanicsState(mechanicsTicked);
+      setTickNowMs(now);
+      isServerHydratedRef.current = true;
+    };
+    void bootstrap();
+    return () => {
+      cancelled = true;
+      isServerHydratedRef.current = false;
+    };
+  }, [token]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      localStorage.setItem(STORAGE_CELLS_KEY, JSON.stringify(cells));
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [cells]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      localStorage.setItem(STORAGE_PLACEMENTS_KEY, JSON.stringify(placements));
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [placements]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      localStorage.setItem(STORAGE_BUILD_QUEUE_KEY, JSON.stringify(buildQueue));
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [buildQueue]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      saveResourceState(resourceState);
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [resourceState]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      saveMechanicsState(mechanicsState);
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [mechanicsState]);
+    if (!token || !isServerHydratedRef.current) return;
+    if (saveBlobTimerRef.current != null) {
+      window.clearTimeout(saveBlobTimerRef.current);
+    }
+    saveBlobTimerRef.current = window.setTimeout(async () => {
+      if (!token || !isServerHydratedRef.current || saveInFlightRef.current) return;
+      saveInFlightRef.current = true;
+      const payload: BaseStateBlobPayload = {
+        version: 1,
+        cells,
+        placements,
+        buildingVisuals,
+        buildQueue,
+        resourceState,
+        mechanicsState
+      };
+      try {
+        const saved = await setBaseStateBlob(token, toBlobState(payload), lastServerUpdatedAtRef.current);
+        lastServerUpdatedAtRef.current = saved.updatedAt;
+      } catch (error) {
+        if (error instanceof ApiRequestError && error.status === 409) {
+          try {
+            const latest = await getBaseStateBlob(token);
+            lastServerUpdatedAtRef.current = latest.updatedAt;
+            const parsed = latest.stateJson ? parseBlobState(latest.stateJson) : null;
+            if (parsed) {
+              const now = nowMs();
+              setPassiveRatesFromPlacements(parsed.placements);
+              setCells(parsed.cells);
+              setPlacements(parsed.placements);
+              setBuildingVisuals(parsed.buildingVisuals);
+              setBuildQueue(parsed.buildQueue);
+              setResourceState(tickResources(parsed.resourceState, now));
+              setMechanicsState(pruneExpiredDebuffs(parsed.mechanicsState, now));
+              setTickNowMs(now);
+            }
+          } catch (reloadError) {
+            console.warn("[BaseScreen] failed to resolve state conflict", reloadError);
+          }
+        } else if (error instanceof ApiRequestError && error.status === 429) {
+          // Write throttled by server guard, next state change retries naturally.
+        } else {
+          console.warn("[BaseScreen] failed to save server blob state", error);
+        }
+      } finally {
+        saveInFlightRef.current = false;
+      }
+    }, 500);
+    return () => {
+      if (saveBlobTimerRef.current != null) {
+        window.clearTimeout(saveBlobTimerRef.current);
+        saveBlobTimerRef.current = null;
+      }
+    };
+  }, [token, cells, placements, buildingVisuals, buildQueue, resourceState, mechanicsState]);
 
   useEffect(() => {
     setPassiveRatesFromPlacements(placements);
@@ -1384,16 +1512,15 @@ export function BaseScreen({ onBack, onTrenches }: BaseScreenProps) {
   const onSaveCells = () => {
     const snapshot = cloneCells(cells);
     const snapshotJson = JSON.stringify(snapshot, null, 2);
-    localStorage.setItem(STORAGE_CELLS_KEY, snapshotJson);
-    console.log("[BaseScreen] rr_base_cells_v1 object", snapshot);
-    console.log("[BaseScreen] rr_base_cells_v1 json", snapshotJson);
+    console.log("[BaseScreen] cells snapshot object", snapshot);
+    console.log("[BaseScreen] cells snapshot json", snapshotJson);
   };
 
   const onCopyCellsJson = async () => {
     const snapshotJson = JSON.stringify(cloneCells(cells), null, 2);
     try {
       await navigator.clipboard.writeText(snapshotJson);
-      console.log("[BaseScreen] copied rr_base_cells_v1 json to clipboard");
+      console.log("[BaseScreen] copied cells snapshot json to clipboard");
     } catch {
       console.log("[BaseScreen] copy failed, manual json follows:");
       console.log(snapshotJson);
@@ -1403,7 +1530,6 @@ export function BaseScreen({ onBack, onTrenches }: BaseScreenProps) {
   const onResetCells = () => {
     const defaults = cloneCells(BASE_CELL_DEFAULTS);
     setCells(defaults);
-    localStorage.removeItem(STORAGE_CELLS_KEY);
   };
 
   const setDebugBuildingVisual = (key: keyof BuildingVisual, value: number) => {
@@ -1413,14 +1539,12 @@ export function BaseScreen({ onBack, onTrenches }: BaseScreenProps) {
   };
 
   const onSaveBuildingVisuals = () => {
-    localStorage.setItem(STORAGE_BUILDING_VISUAL_KEY, JSON.stringify(buildingVisuals, null, 2));
-    console.log("[BaseScreen] rr_building_visual_v1", buildingVisuals);
+    console.log("[BaseScreen] building visuals snapshot", buildingVisuals);
   };
 
   const onResetBuildingVisuals = () => {
     const defaults = createDefaultBuildingVisuals();
     setBuildingVisuals(defaults);
-    localStorage.removeItem(STORAGE_BUILDING_VISUAL_KEY);
   };
 
   const onCenterPointerDown = (event: ReactPointerEvent<SVGCircleElement>, cell: BaseCell) => {

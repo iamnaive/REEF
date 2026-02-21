@@ -49,6 +49,9 @@ const NONCE_TTL_MS = 5 * 60 * 1000;
 const MATCH_BANK_DAY_CAP = 3;
 const MATCH_BANK_MAX = MATCH_LIMIT_PER_DAY * MATCH_BANK_DAY_CAP;
 const MAX_RECENT_PROJECTIONS_PER_WEATHER = 20;
+const BASE_BLOB_MAX_CHARS = 200_000;
+const BASE_BLOB_WRITE_COOLDOWN_MS = 2_000;
+const baseBlobWriteGuard = new Map<string, number>();
 router.options("*", () => new Response(null, { headers: CORS_HEADERS }));
 
 router.get("/api/health", () => json({ ok: true }));
@@ -1049,6 +1052,74 @@ router.post("/api/base/collect", async (request: Request, env: Env) => {
   return json({ base, resources, collected: { shards: totalShards, pearls: totalPearls } });
 });
 
+router.get("/api/base/state", async (request: Request, env: Env) => {
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ error: "Unauthorized" }, 401);
+  await ensureBaseStateBlobTable(env);
+  const row = await env.DB.prepare(
+    "SELECT state_json, updated_at FROM base_state_blobs WHERE address = ?"
+  )
+    .bind(auth.address)
+    .first<{ state_json: string; updated_at: string }>();
+
+  if (!row) {
+    return json({ stateJson: null, updatedAt: null });
+  }
+
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(row.state_json);
+  } catch {
+    parsed = null;
+  }
+  return json({ stateJson: parsed, updatedAt: row.updated_at });
+});
+
+router.post("/api/base/state", async (request: Request, env: Env) => {
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ error: "Unauthorized" }, 401);
+
+  const nowMs = Date.now();
+  const lastWriteMs = baseBlobWriteGuard.get(auth.address) ?? 0;
+  if (nowMs - lastWriteMs < BASE_BLOB_WRITE_COOLDOWN_MS) {
+    return json({ error: "Too many writes" }, 429);
+  }
+
+  const body = await readBody(request);
+  const schema = z.object({
+    stateJson: z.record(z.unknown()),
+    clientUpdatedAt: z.string().optional()
+  });
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return json({ error: "Invalid payload" }, 400);
+
+  const serialized = JSON.stringify(parsed.data.stateJson);
+  if (serialized.length > BASE_BLOB_MAX_CHARS) {
+    return json({ error: "Payload too large", limitChars: BASE_BLOB_MAX_CHARS }, 413);
+  }
+
+  await ensureBaseStateBlobTable(env);
+  const row = await env.DB.prepare(
+    "SELECT updated_at FROM base_state_blobs WHERE address = ?"
+  )
+    .bind(auth.address)
+    .first<{ updated_at: string }>();
+  const serverUpdatedAt = row?.updated_at ?? null;
+  const clientUpdatedAt = parsed.data.clientUpdatedAt ?? null;
+  if (clientUpdatedAt !== null && clientUpdatedAt !== serverUpdatedAt) {
+    return json({ error: "Conflict", updatedAt: serverUpdatedAt }, 409);
+  }
+
+  const updatedAt = new Date(nowMs).toISOString();
+  await env.DB.prepare(
+    "INSERT INTO base_state_blobs (address, state_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(address) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at"
+  )
+    .bind(auth.address, serialized, updatedAt)
+    .run();
+  baseBlobWriteGuard.set(auth.address, nowMs);
+  return json({ ok: true, updatedAt });
+});
+
 router.all("*", () => json({ error: "Not found" }, 404));
 
 export default {
@@ -1530,6 +1601,9 @@ async function ensureCoreTables(env: Env) {
     ),
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS logs (id TEXT PRIMARY KEY, address TEXT, event TEXT NOT NULL, payload_json TEXT, created_at TEXT NOT NULL, ip TEXT)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS base_state_blobs (address TEXT PRIMARY KEY, state_json TEXT NOT NULL, updated_at TEXT NOT NULL)"
     )
   ]);
   coreTablesReady = true;
@@ -1787,6 +1861,15 @@ async function ensureBaseTable(env: Env) {
     "CREATE INDEX IF NOT EXISTS idx_base_buildings_address ON base_buildings (address)"
   ).run();
   baseTableReady = true;
+}
+
+let baseStateBlobTableReady = false;
+async function ensureBaseStateBlobTable(env: Env) {
+  if (baseStateBlobTableReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS base_state_blobs (address TEXT PRIMARY KEY, state_json TEXT NOT NULL, updated_at TEXT NOT NULL)"
+  ).run();
+  baseStateBlobTableReady = true;
 }
 
 async function getBaseState(env: Env, address: string): Promise<BaseState> {

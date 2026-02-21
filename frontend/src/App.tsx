@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PhaserGame } from "./game/PhaserGame";
 import { eventBus } from "./game/eventBus";
-import { BaseScreenServer } from "./ui/BaseScreenServer";
+import { BaseScreen } from "./ui/BaseScreen";
 import {
   HEROES,
   HeroType,
@@ -1109,10 +1109,8 @@ export default function App() {
         )}
 
         {screen === "base" && (
-          <BaseScreenServer
+          <BaseScreen
             token={token}
-            resources={resources}
-            onResourcesUpdate={setResources}
             onBack={() => setScreen("menu")}
             onTrenches={onTrenches}
           />

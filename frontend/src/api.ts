@@ -15,6 +15,17 @@ import {
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8787";
 
+export class ApiRequestError extends Error {
+  status?: number;
+  details?: unknown;
+  constructor(message: string, status?: number, details?: unknown) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.details = details;
+  }
+}
+
 function getHeaders(token?: string, idempotencyKey?: string) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
@@ -233,4 +244,38 @@ export async function collectBaseResources(token: string) {
     resources: ResourceTotals;
     collected: { shards: number; pearls: number };
   };
+}
+
+export async function getBaseStateBlob(token: string) {
+  const res = await fetch(`${API_BASE}/api/base/state`, {
+    headers: getHeaders(token)
+  });
+  if (!res.ok) {
+    const details = await res.json().catch(() => null);
+    throw new ApiRequestError("Failed to load base state blob", res.status, details);
+  }
+  return (await res.json()) as {
+    stateJson: Record<string, unknown> | null;
+    updatedAt: string | null;
+  };
+}
+
+export async function setBaseStateBlob(
+  token: string,
+  stateJson: Record<string, unknown>,
+  clientUpdatedAt?: string | null
+) {
+  const res = await fetch(`${API_BASE}/api/base/state`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({
+      stateJson,
+      ...(clientUpdatedAt ? { clientUpdatedAt } : {})
+    })
+  });
+  if (!res.ok) {
+    const details = await res.json().catch(() => null);
+    throw new ApiRequestError("Failed to save base state blob", res.status, details);
+  }
+  return (await res.json()) as { ok: true; updatedAt: string };
 }

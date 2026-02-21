@@ -149,6 +149,12 @@ CREATE TABLE IF NOT EXISTS entry_payments (
   verified_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS base_state_blobs (
+  address TEXT PRIMARY KEY,
+  state_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
 CREATE INDEX IF NOT EXISTS idx_daily_limits_address_day ON daily_limits (address, day_key);
 CREATE INDEX IF NOT EXISTS idx_match_bank_address ON match_bank (address);
