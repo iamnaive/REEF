@@ -2896,6 +2896,14 @@ body {
 }
 
 /* Base screen */
+html.base-screen-no-scroll,
+body.base-screen-no-scroll {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .base-screen-root {
   position: fixed;
   inset: 0;
@@ -2903,6 +2911,8 @@ body {
   height: 100vh;
   z-index: 16;
   overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 .base-screen-back {
@@ -2932,12 +2942,17 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x;
 }
 
 .hud-btn {
   position: static;
-  padding: 6px 10px;
+  padding: 8px 12px;
   font-size: 12px;
+  min-height: 44px;
+  min-width: 44px;
 }
 
 .hud-pills {
@@ -2946,6 +2961,8 @@ body {
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
+  touch-action: pan-x;
+  overscroll-behavior: contain;
 }
 
 .hud-pill {
@@ -3045,6 +3062,8 @@ body {
   position: absolute;
   inset: 0;
   z-index: 18;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 .base-screen-map-layer,
@@ -3056,6 +3075,13 @@ body {
 
 .base-screen-map-layer {
   z-index: 0;
+}
+
+.base-screen-pan-capture {
+  position: absolute;
+  z-index: 0;
+  background: transparent;
+  touch-action: none;
 }
 
 .base-screen-map-layer img {
@@ -4297,8 +4323,26 @@ body {
   background: linear-gradient(180deg, rgba(74, 186, 218, 0.54), rgba(38, 136, 172, 0.62));
   border: 1px solid rgba(207, 247, 255, 0.58);
   border-radius: 12px;
-  padding: 8px 10px;
+  padding: calc(8px + env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
   backdrop-filter: blur(6px);
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+.base-screen-mobile-debug {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  z-index: 1200;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(172, 235, 255, 0.45);
+  background: rgba(4, 22, 34, 0.82);
+  color: #d8f8ff;
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: none;
 }
 
 .bs-threatbars {

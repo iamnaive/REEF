@@ -413,6 +413,10 @@ function getCenter(points: Point[]) {
   };
 }
 
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 function formatCost(cost: TierCost): string {
   const chunks: string[] = [`Cash ${cost.cash}`];
   if (cost.alpha != null) chunks.push(`Alpha ${cost.alpha}`);
@@ -493,6 +497,7 @@ function getNextTier(tier: Tier): Tier | null {
 
 export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenches }: BaseScreenProps) {
   const devMode = import.meta.env.DEV;
+  const mobileDebugEnabled = devMode && new URLSearchParams(window.location.search).get("mobileDebug") === "1";
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const queueTitleRef = useRef<HTMLDivElement | null>(null);
@@ -514,6 +519,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
   } | null>(null);
 
   const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [cameraPx, setCameraPx] = useState({ x: 0, y: 0 });
   const [cells, setCells] = useState<BaseCell[]>(() => cloneCells(BASE_CELL_DEFAULTS));
   const [placements, setPlacements] = useState<Record<CellId, Placement | null>>(() => createDefaultPlacements());
   const [buildingVisuals, setBuildingVisuals] = useState<Record<BuildingId, BuildingVisual>>(() => createDefaultBuildingVisuals());
@@ -572,6 +578,16 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
     kol_shills: 0,
     impostors: 0
   });
+  const panGestureRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startCameraX: number;
+    startCameraY: number;
+    isPanning: boolean;
+  } | null>(null);
+  const suppressTapRef = useRef(false);
+  const suppressTapTimerRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     const node = rootRef.current;
@@ -595,6 +611,9 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
       if (saveBlobTimerRef.current != null) {
         window.clearTimeout(saveBlobTimerRef.current);
       }
+      if (suppressTapTimerRef.current != null) {
+        window.clearTimeout(suppressTapTimerRef.current);
+      }
     };
   }, []);
 
@@ -605,6 +624,15 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
   useEffect(() => {
     toastsRef.current = toasts;
   }, [toasts]);
+
+  useEffect(() => {
+    document.documentElement.classList.add("base-screen-no-scroll");
+    document.body.classList.add("base-screen-no-scroll");
+    return () => {
+      document.documentElement.classList.remove("base-screen-no-scroll");
+      document.body.classList.remove("base-screen-no-scroll");
+    };
+  }, []);
 
   const applyServerResources = useCallback((totals: ServerResourceLike, serverNowMs?: number) => {
     const serverNow = Number.isFinite(serverNowMs) ? (serverNowMs as number) : nowMs();
@@ -1146,20 +1174,113 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
     return () => window.clearInterval(timer);
   }, [mechanicsState.debuffs, randomRange, spawnMapToast]);
 
-  const drawRect = useMemo(() => {
+  const panMetrics = useMemo(() => {
     const scale = Math.max(viewport.width / BASE_MAP_WIDTH, viewport.height / BASE_MAP_HEIGHT);
     const width = BASE_MAP_WIDTH * scale;
     const height = BASE_MAP_HEIGHT * scale;
+    const baseLeft = (viewport.width - width) / 2;
+    const baseTop = (viewport.height - height) / 2;
+    const canPanX = width > viewport.width + 0.5;
+    const canPanY = height > viewport.height + 0.5;
+    const minCameraX = canPanX ? viewport.width - width - baseLeft : 0;
+    const maxCameraX = canPanX ? -baseLeft : 0;
+    const minCameraY = canPanY ? viewport.height - height - baseTop : 0;
+    const maxCameraY = canPanY ? -baseTop : 0;
     return {
       width,
       height,
-      left: (viewport.width - width) / 2,
-      top: (viewport.height - height) / 2
+      baseLeft,
+      baseTop,
+      canPanX,
+      canPanY,
+      minCameraX,
+      maxCameraX,
+      minCameraY,
+      maxCameraY,
+      leftMin: viewport.width - width,
+      leftMax: 0,
+      topMin: viewport.height - height,
+      topMax: 0
     };
-  }, [viewport.width, viewport.height]);
+  }, [viewport.height, viewport.width]);
+
+  useEffect(() => {
+    setCameraPx((prev) => {
+      const nextX = panMetrics.canPanX ? clampNumber(prev.x, panMetrics.minCameraX, panMetrics.maxCameraX) : 0;
+      const nextY = panMetrics.canPanY ? clampNumber(prev.y, panMetrics.minCameraY, panMetrics.maxCameraY) : 0;
+      if (nextX === prev.x && nextY === prev.y) return prev;
+      return { x: nextX, y: nextY };
+    });
+  }, [panMetrics]);
+
+  const drawRect = useMemo(() => {
+    const clampedX = panMetrics.canPanX ? clampNumber(cameraPx.x, panMetrics.minCameraX, panMetrics.maxCameraX) : 0;
+    const clampedY = panMetrics.canPanY ? clampNumber(cameraPx.y, panMetrics.minCameraY, panMetrics.maxCameraY) : 0;
+    const left = panMetrics.canPanX
+      ? clampNumber(panMetrics.baseLeft + clampedX, panMetrics.leftMin, panMetrics.leftMax)
+      : panMetrics.baseLeft;
+    const top = panMetrics.canPanY
+      ? clampNumber(panMetrics.baseTop + clampedY, panMetrics.topMin, panMetrics.topMax)
+      : panMetrics.baseTop;
+    return {
+      width: panMetrics.width,
+      height: panMetrics.height,
+      left,
+      top
+    };
+  }, [cameraPx.x, cameraPx.y, panMetrics]);
 
   const mapScaleX = drawRect.width / BASE_MAP_WIDTH;
   const mapScaleY = drawRect.height / BASE_MAP_HEIGHT;
+
+  const onPanPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch") return;
+    if (!panMetrics.canPanX && !panMetrics.canPanY) return;
+    panGestureRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startCameraX: cameraPx.x,
+      startCameraY: cameraPx.y,
+      isPanning: false
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [cameraPx.x, cameraPx.y, panMetrics.canPanX, panMetrics.canPanY]);
+
+  const onPanPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = panGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const dx = event.clientX - gesture.startClientX;
+    const dy = event.clientY - gesture.startClientY;
+    if (!gesture.isPanning && Math.hypot(dx, dy) > 8) {
+      gesture.isPanning = true;
+      suppressTapRef.current = true;
+    }
+    if (!gesture.isPanning) return;
+    event.preventDefault();
+    const nextX = panMetrics.canPanX
+      ? clampNumber(gesture.startCameraX + dx, panMetrics.minCameraX, panMetrics.maxCameraX)
+      : 0;
+    const nextY = panMetrics.canPanY
+      ? clampNumber(gesture.startCameraY + dy, panMetrics.minCameraY, panMetrics.maxCameraY)
+      : 0;
+    setCameraPx({ x: nextX, y: nextY });
+  }, [panMetrics.canPanX, panMetrics.canPanY, panMetrics.maxCameraX, panMetrics.maxCameraY, panMetrics.minCameraX, panMetrics.minCameraY]);
+
+  const onPanPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = panGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    panGestureRef.current = null;
+    if (suppressTapTimerRef.current != null) {
+      window.clearTimeout(suppressTapTimerRef.current);
+    }
+    suppressTapTimerRef.current = window.setTimeout(() => {
+      suppressTapRef.current = false;
+    }, 120);
+  }, []);
 
   const updateSelectedCell = (updater: (cell: BaseCell) => BaseCell) => {
     if (!selectedCellId) return;
@@ -2036,7 +2157,17 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
         </div>
       </div>
 
-      <div className="base-screen-stage" onClick={() => setSelectedCellId(null)}>
+      <div
+        className="base-screen-stage"
+        onPointerDownCapture={onPanPointerDown}
+        onPointerMoveCapture={onPanPointerMove}
+        onPointerUpCapture={onPanPointerUp}
+        onPointerCancelCapture={onPanPointerUp}
+        onClick={() => {
+          if (suppressTapRef.current) return;
+          setSelectedCellId(null);
+        }}
+      >
         <div className="base-screen-map-layer">
           <img
             src="/assets/ui/base-map.avif"
@@ -2050,6 +2181,15 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
             }}
           />
         </div>
+        <div
+          className="base-screen-pan-capture"
+          style={{
+            left: drawRect.left,
+            top: drawRect.top,
+            width: drawRect.width,
+            height: drawRect.height
+          }}
+        />
 
         <svg
           className="base-screen-grid-layer"
@@ -2085,6 +2225,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                   onMouseLeave={() => setHoveredCellId((prev) => (prev === cell.id ? null : prev))}
                   onClick={(event) => {
                     event.stopPropagation();
+                    if (suppressTapRef.current) return;
                     setSelectedCellId(cell.id);
                     const stagePoint = toStageCoords(event.clientX, event.clientY);
                     if (stagePoint) {
@@ -2166,6 +2307,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                 ].join(" ")}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (suppressTapRef.current) return;
                   setSelectedCellId(cellId);
                   if (placement) {
                     spawnFx("glowRing", center.x, center.y);
@@ -2675,6 +2817,25 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
         bonusText={swarmFinish?.perfect ? "+1 Ticket" : undefined}
         onClose={() => setSwarmFinish(null)}
       />
+
+      {mobileDebugEnabled && (
+        <div className="base-screen-mobile-debug">
+          <div>
+            vp {Math.round(viewport.width)}x{Math.round(viewport.height)}
+          </div>
+          <div>
+            rect l:{Math.round(drawRect.left)} t:{Math.round(drawRect.top)} w:{Math.round(drawRect.width)} h:
+            {Math.round(drawRect.height)}
+          </div>
+          <div>
+            cam x:{Math.round(cameraPx.x)} y:{Math.round(cameraPx.y)}
+          </div>
+          <div>
+            panX {Math.round(panMetrics.minCameraX)}..{Math.round(panMetrics.maxCameraX)} | panY{" "}
+            {Math.round(panMetrics.minCameraY)}..{Math.round(panMetrics.maxCameraY)}
+          </div>
+        </div>
+      )}
 
       {devMode && debugVisible && (
         <aside className="base-screen-debug">
