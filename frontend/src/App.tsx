@@ -1120,7 +1120,7 @@ export default function App() {
 
         {screen === "menu" && (
           <div className="screen center menu-screen">
-            <button className="primary big start-button" onClick={onPlayDemo} disabled={loading}>
+            <button className="primary big start-button" onClick={onPlay} disabled={loading}>
             </button>
             {errorMsg && <div className="hint error-text">{errorMsg}</div>}
           </div>
