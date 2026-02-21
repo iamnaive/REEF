@@ -40,6 +40,7 @@ import { useResources } from "./resources";
 import { fadeOutMenuLoop, playMenuLoop, playSfx, playRandomKnock, preloadSfx, setSfxEnabled } from "./game/sounds";
 import { closeWalletModal, getWalletProvider } from "./walletProvider";
 import {
+  STORAGE_ADDRESS,
   assertNoForbiddenStorageKeysDev,
   clearStoredAuth,
   readStoredAddress,
@@ -78,6 +79,7 @@ export default function App() {
   const [addressStored, setAddressStored] = useState<string | null>(
     readStoredAddress()
   );
+  const hadWalletRef = useRef<boolean>(Boolean(readStoredAddress()));
   const [heroes, setHeroes] = useState<HeroType[]>([]);
   const [selectedHero, setSelectedHero] = useState<HeroType>("Shark");
   const [selectedLineup, setSelectedLineup] = useState<HeroType[]>(HEROES);
@@ -450,11 +452,17 @@ export default function App() {
       const accounts = Array.isArray(accountsRaw) ? (accountsRaw as string[]) : [];
       const nextAddress = normalizeWalletAddress(accounts[0] || "");
       if (!nextAddress) {
+        if (!hadWalletRef.current) {
+          return;
+        }
         clearAuth();
         return;
       }
+      hadWalletRef.current = true;
       if (addressStored && addressStored.toLowerCase() !== nextAddress.toLowerCase()) {
         clearAuth();
+      } else {
+        setAddressStored(nextAddress);
       }
     };
 
@@ -469,6 +477,14 @@ export default function App() {
     if (!activeToken) return null;
     try {
       const state = await getState(activeToken);
+      const normalizedServerAddress = normalizeWalletAddress(state.address);
+      if (normalizedServerAddress) {
+        setAddressStored(normalizedServerAddress);
+        hadWalletRef.current = true;
+        if (readStoredAddress()?.toLowerCase() !== normalizedServerAddress.toLowerCase()) {
+          localStorage.setItem(STORAGE_ADDRESS, normalizedServerAddress);
+        }
+      }
       const serverBase = await fetchBase(activeToken);
       setBaseState(serverBase);
       setHeroes(state.heroes);
