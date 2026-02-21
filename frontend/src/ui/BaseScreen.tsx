@@ -60,7 +60,7 @@ import {
 } from "../events/SwarmEventSystem";
 import { SwarmLayer } from "./SwarmLayer";
 import { SwarmFinishOverlay } from "./SwarmFinishOverlay";
-import { ApiRequestError, getBaseStateBlob, getResources, setBaseStateBlob } from "../api";
+import { ApiRequestError, buildOrUpgrade, getBaseStateBlob, getResources, performAction, setBaseStateBlob } from "../api";
 
 type BaseCell = BaseCellLayout;
 
@@ -110,8 +110,22 @@ type FloatingCashHit = {
   positive?: boolean;
 };
 
+type ServerResourceLike = Partial<{
+  cash: number;
+  yield: number;
+  alpha: number;
+  faith: number;
+  tickets: number;
+  mon: number;
+  coins: number;
+  pearls: number;
+  shards: number;
+}>;
+
 type BaseScreenProps = {
   token: string | null;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
   onBack: () => void;
   onTrenches: () => void;
 };
@@ -449,6 +463,27 @@ function getActionMicroline(actionId: string): string | null {
   return null;
 }
 
+function getServerActionKey(buildingId: BuildingId, actionId: string): string | null {
+  if ((buildingId as string) === "shard_mine" && (actionId === "collect" || actionId === "collect_shard_mine")) {
+    return "collect:shard_mine";
+  }
+  if ((buildingId as string) === "pearl_grotto" && (actionId === "collect" || actionId === "collect_pearl_grotto")) {
+    return "collect:pearl_grotto";
+  }
+  if ((buildingId as string) === "training_reef" && (actionId === "activate" || actionId === "activate_training_reef")) {
+    return "activate:training_reef";
+  }
+  return null;
+}
+
+function getServerBuildingType(buildingId: BuildingId): "shard_mine" | "pearl_grotto" | "training_reef" | "storage_vault" | null {
+  if (buildingId === ("shard_mine" as BuildingId)) return "shard_mine";
+  if (buildingId === ("pearl_grotto" as BuildingId)) return "pearl_grotto";
+  if (buildingId === ("training_reef" as BuildingId)) return "training_reef";
+  if (buildingId === ("storage_vault" as BuildingId)) return "storage_vault";
+  return null;
+}
+
 function getNextTier(tier: Tier): Tier | null {
   if (tier === 1) return 2;
   if (tier === 2) return 3;
@@ -456,7 +491,7 @@ function getNextTier(tier: Tier): Tier | null {
   return null;
 }
 
-export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
+export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenches }: BaseScreenProps) {
   const devMode = import.meta.env.DEV;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
@@ -571,24 +606,34 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
     toastsRef.current = toasts;
   }, [toasts]);
 
-  const syncResourcesFromServer = useCallback(async () => {
-    if (!token) return;
-    const result = await getResources(token);
-    const serverNow = Number.isFinite(result.serverNowMs) ? result.serverNowMs : nowMs();
+  const applyServerResources = useCallback((totals: ServerResourceLike, serverNowMs?: number) => {
+    const serverNow = Number.isFinite(serverNowMs) ? (serverNowMs as number) : nowMs();
+    const nextCash = totals.cash ?? totals.coins ?? 0;
+    const nextYield = totals.yield ?? totals.pearls ?? 0;
+    const nextAlpha = totals.alpha ?? totals.shards ?? 0;
+    const nextFaith = totals.faith ?? 0;
+    const nextTickets = totals.tickets ?? 0;
+    const nextMon = totals.mon ?? 0;
     setTickNowMs(serverNow);
     setResourceState((prev) => ({
       ...prev,
       res: {
-        cash: result.resources.cash,
-        yield: result.resources.yield,
-        alpha: result.resources.alpha,
-        faith: result.resources.faith,
-        tickets: result.resources.tickets,
-        mon: result.resources.mon
+        cash: nextCash,
+        yield: nextYield,
+        alpha: nextAlpha,
+        faith: nextFaith,
+        tickets: nextTickets,
+        mon: nextMon
       },
       lastTickMs: serverNow
     }));
-  }, [token]);
+  }, []);
+
+  const syncResourcesFromServer = useCallback(async () => {
+    if (!token) return;
+    const result = await getResources(token);
+    applyServerResources(result.resources, result.serverNowMs);
+  }, [applyServerResources, token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -996,6 +1041,9 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
     });
     if (hadBlockedUnpaidJob) {
       setActionMessage("Not enough resources to finish unpaid queued job");
+      if (token) {
+        void syncResourcesFromServer();
+      }
     }
     if (nextRes !== resourceState.res) {
       setResourceState((prev) => ({ ...prev, res: nextRes }));
@@ -1031,7 +1079,10 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
       }
       spawnFx("glowRing", center.x, center.y);
     });
-  }, [cellById, dayIndex, resourceState.res, spawnFx]);
+    if (token) {
+      void syncResourcesFromServer();
+    }
+  }, [cellById, dayIndex, resourceState.res, spawnFx, syncResourcesFromServer, token]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1583,26 +1634,46 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
     setPendingBuildId(buildingId);
   };
 
-  const enqueueBuildForSelectedCell = () => {
+  const enqueueBuildForSelectedCell = async () => {
     if (!selectedCellId || !pendingBuildId) return;
     if (placements[selectedCellId]) return;
     if (hasPendingJobForCell(selectedCellId)) return;
     const buildingEconomy = ECONOMY[pendingBuildId];
     if (!buildingEconomy) return;
     const buildTier = buildingEconomy.tiers[1];
+    const serverBuildingType = getServerBuildingType(pendingBuildId);
+    if (token && serverBuildingType) {
+      try {
+        const response = await buildOrUpgrade(token, serverBuildingType);
+        applyServerResources(response.resources as ServerResourceLike);
+      } catch (error) {
+        const message =
+          error instanceof ApiRequestError
+            ? ((error.details as { error?: string } | null)?.error || error.message)
+            : "Build failed";
+        setBuildError(message);
+        await syncResourcesFromServer().catch(() => null);
+        return;
+      }
+    }
     const affordability = canAfford(resourceState.res, buildTier.cost, dayIndex);
     if (!affordability.ok) {
       setBuildError(affordability.reason || "Cannot build");
+      if (token) {
+        await syncResourcesFromServer().catch(() => null);
+      }
       return;
     }
     setBuildError("");
-    setResourceState((prev) => {
-      const next = {
-        ...prev,
-        res: spend(prev.res, buildTier.cost, dayIndex)
-      };
-      return next;
-    });
+    if (!(token && serverBuildingType)) {
+      setResourceState((prev) => {
+        const next = {
+          ...prev,
+          res: spend(prev.res, buildTier.cost, dayIndex)
+        };
+        return next;
+      });
+    }
     const job: BuildJob = {
       id: crypto.randomUUID(),
       cellId: selectedCellId,
@@ -1615,10 +1686,9 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
       costPaid: true
     };
     setBuildQueue((prev) => enqueueJob(prev, job));
-    void syncResourcesFromServer();
   };
 
-  const enqueueUpgradeForSelectedCell = () => {
+  const enqueueUpgradeForSelectedCell = async () => {
     if (!selectedCellId || !selectedPlacement) return;
     if (hasPendingJobForCell(selectedCellId)) return;
     const nextTier = getNextTier(selectedPlacement.tier);
@@ -1626,19 +1696,39 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
     const buildingEconomy = ECONOMY[selectedPlacement.buildingId];
     if (!buildingEconomy) return;
     const tierEconomy = buildingEconomy.tiers[nextTier];
+    const serverBuildingType = getServerBuildingType(selectedPlacement.buildingId);
+    if (token && serverBuildingType) {
+      try {
+        const response = await buildOrUpgrade(token, serverBuildingType);
+        applyServerResources(response.resources as ServerResourceLike);
+      } catch (error) {
+        const message =
+          error instanceof ApiRequestError
+            ? ((error.details as { error?: string } | null)?.error || error.message)
+            : "Upgrade failed";
+        setBuildError(message);
+        await syncResourcesFromServer().catch(() => null);
+        return;
+      }
+    }
     const affordability = canAfford(resourceState.res, tierEconomy.cost, dayIndex);
     if (!affordability.ok) {
       setBuildError(affordability.reason || "Cannot upgrade");
+      if (token) {
+        await syncResourcesFromServer().catch(() => null);
+      }
       return;
     }
     setBuildError("");
-    setResourceState((prev) => {
-      const next = {
-        ...prev,
-        res: spend(prev.res, tierEconomy.cost, dayIndex)
-      };
-      return next;
-    });
+    if (!(token && serverBuildingType)) {
+      setResourceState((prev) => {
+        const next = {
+          ...prev,
+          res: spend(prev.res, tierEconomy.cost, dayIndex)
+        };
+        return next;
+      });
+    }
     const job: BuildJob = {
       id: crypto.randomUUID(),
       cellId: selectedCellId,
@@ -1651,7 +1741,6 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
       costPaid: true
     };
     setBuildQueue((prev) => enqueueJob(prev, job));
-    void syncResourcesFromServer();
   };
 
   const completeActiveNow = () => {
@@ -1719,8 +1808,51 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
     [getActionCooldownKey]
   );
 
-  const runBuildingAction = useCallback((actionId: string, mode: "one" | "all") => {
+  const runBuildingAction = useCallback(async (actionId: string, mode: "one" | "all") => {
     if (!selectedCellId || !selectedPlacement) return;
+    const serverActionKey = getServerActionKey(selectedPlacement.buildingId, actionId);
+    if (token && serverActionKey) {
+      try {
+        const res = await performAction(token, serverActionKey, { mode, cellId: selectedCellId });
+        if (res.resources) {
+          setResourceState((prev) => ({
+            ...prev,
+            res: {
+              cash: res.resources.cash,
+              yield: res.resources.yield,
+              alpha: res.resources.alpha,
+              faith: res.resources.faith,
+              tickets: res.resources.tickets,
+              mon: res.resources.mon
+            },
+            lastTickMs: res.serverNowMs || prev.lastTickMs
+          }));
+        }
+        if (!res.ok) {
+          setActionMessage("Action blocked by server");
+          return;
+        }
+        setActionMessage("Action complete");
+      } catch (error) {
+        if (error instanceof ApiRequestError) {
+          const details = error.details as { code?: string; state?: { remainingMs?: number } } | undefined;
+          if (details?.code === "COOLDOWN" && details?.state?.remainingMs != null) {
+            setActionMessage(`Cooldown: ${formatMs(details.state.remainingMs)}`);
+          } else if (details?.code === "NO_CHARGES") {
+            setActionMessage("No charges");
+          } else if (details?.code === "DAILY_CAP") {
+            setActionMessage("Daily cap reached");
+          } else {
+            setActionMessage(details?.code || "Server action failed");
+          }
+        } else {
+          setActionMessage("Server action failed");
+        }
+      } finally {
+        void syncResourcesFromServer();
+      }
+      return;
+    }
     const actionNowMs = tickNowMs;
     const currentDayIndex = getDayIndex(resourceState, actionNowMs);
     const result = tryUseAction({
@@ -1762,6 +1894,7 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
     selectedCellId,
     selectedPlacement,
     selectedCenter,
+    token,
     syncResourcesFromServer,
     spawnFx,
     tickNowMs
@@ -1890,6 +2023,9 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
           })}
         </div>
         <div className="hud-actions">
+          <button className="base-screen-back hud-btn" onClick={onToggleSound}>
+            {soundEnabled ? "Sound: ON" : "Sound: OFF"}
+          </button>
           <button className="base-screen-back hud-btn" onClick={onTrenches}>Trenches</button>
           <button className="base-screen-back hud-btn" onClick={onBack}>Menu</button>
           {devMode && (
@@ -2362,7 +2498,7 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
                   className="base-build-action base-sidebar-build-btn rr-shine-btn"
                   onClick={(event) => {
                     triggerShine(event.currentTarget);
-                    enqueueBuildForSelectedCell();
+                    void enqueueBuildForSelectedCell();
                   }}
                   disabled={
                     !pendingBuildId ||
@@ -2450,7 +2586,7 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
                   className="base-build-action rr-shine-btn"
                   onClick={(event) => {
                     triggerShine(event.currentTarget);
-                    enqueueUpgradeForSelectedCell();
+                    void enqueueUpgradeForSelectedCell();
                   }}
                   disabled={!selectedCellNextTier || selectedCellHasPendingJob || (buildQueue.active !== null && buildQueue.queued.length >= BASE_QUEUE_LIMIT)}
                 >

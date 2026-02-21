@@ -530,10 +530,8 @@ export default function App() {
       setResources(state.resources);
       if (state.dailyChest) {
         setDailyChest(state.dailyChest);
-        // Auto-show daily chest popup if not yet claimed today
-        if (!state.dailyChest.claimedToday) {
-          setShowDailyChest(true);
-        }
+        // Daily chest popup is intentionally disabled for now.
+        setShowDailyChest(false);
       }
       assertNoForbiddenStorageKeysDev("load-state");
       return state;
@@ -1144,9 +1142,6 @@ export default function App() {
             <button className="ghost-button" onClick={() => setScreen("base")}>
               Base
             </button>
-            <button className="ghost-button" onClick={() => setSoundEnabled((prev) => !prev)}>
-              {soundEnabled ? "Sound: ON" : "Sound: OFF"}
-            </button>
           </div>
         </div>
         )}
@@ -1155,6 +1150,8 @@ export default function App() {
           <Suspense fallback={<div className="screen center"><div className="hint">Loading base...</div></div>}>
             <BaseScreen
               token={token}
+              soundEnabled={soundEnabled}
+              onToggleSound={() => setSoundEnabled((prev) => !prev)}
               onBack={() => setScreen("menu")}
               onTrenches={onTrenches}
             />
