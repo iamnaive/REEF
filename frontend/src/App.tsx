@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { PhaserGame } from "./game/PhaserGame";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import type { PhaserGame } from "./game/PhaserGame";
 import { eventBus } from "./game/eventBus";
-import { BaseScreen } from "./ui/BaseScreen";
 import {
   HEROES,
   HeroType,
@@ -61,6 +60,10 @@ const MONAD_CHAIN_HEX = (import.meta.env.VITE_MONAD_CHAIN_ID_HEX || "0x8f").toLo
 const MONAD_CHAIN_NAME = import.meta.env.VITE_MONAD_CHAIN_NAME || "Monad Mainnet";
 const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || "";
 const REOWN_PROJECT_ID = import.meta.env.VITE_REOWN_PROJECT_ID || "";
+const BaseScreen = lazy(async () => {
+  const mod = await import("./ui/BaseScreen");
+  return { default: mod.BaseScreen };
+});
 
 type DemoDailyState = {
   dayKey: string;
@@ -204,11 +207,34 @@ export default function App() {
     };
   }, [readDemoDailyState, writeDemoDailyState]);
 
-  useEffect(() => {
-    if (!gameRef.current) {
-      gameRef.current = new PhaserGame("game-root");
-    }
+  const ensureGame = useCallback(async () => {
+    if (gameRef.current) return;
+    const mod = await import("./game/PhaserGame");
+    gameRef.current = new mod.PhaserGame("game-root");
   }, []);
+
+  useEffect(() => {
+    if (screen === "battle" || screen === "pre") {
+      void ensureGame();
+    }
+  }, [screen, ensureGame]);
+
+  useEffect(() => {
+    const idleCallback =
+      window.requestIdleCallback ??
+      ((cb: IdleRequestCallback) => window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 } as IdleDeadline), 1));
+    const idleCancel = window.cancelIdleCallback ?? window.clearTimeout;
+    const warmupTimer = window.setTimeout(() => {
+      const idleId = idleCallback(() => {
+        void ensureGame();
+        void import("./ui/BaseScreen");
+      });
+      window.setTimeout(() => idleCancel(idleId as number), 10_000);
+    }, 2_000);
+    return () => {
+      window.clearTimeout(warmupTimer);
+    };
+  }, [ensureGame]);
 
   useEffect(() => {
     const onReady = () => setPhaserReady(true);
@@ -1096,11 +1122,13 @@ export default function App() {
         )}
 
         {screen === "base" && (
-          <BaseScreen
-            token={token}
-            onBack={() => setScreen("menu")}
-            onTrenches={onTrenches}
-          />
+          <Suspense fallback={<div className="screen center"><div className="hint">Loading base...</div></div>}>
+            <BaseScreen
+              token={token}
+              onBack={() => setScreen("menu")}
+              onTrenches={onTrenches}
+            />
+          </Suspense>
         )}
 
         {screen === "menu" && (
