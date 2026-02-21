@@ -48,7 +48,6 @@ import {
   loadResourceState,
   setPassiveRatesFromPlacements,
   spend,
-  tickResources,
   type ResourceState
 } from "../base/resourcesState";
 import {
@@ -61,7 +60,7 @@ import {
 } from "../events/SwarmEventSystem";
 import { SwarmLayer } from "./SwarmLayer";
 import { SwarmFinishOverlay } from "./SwarmFinishOverlay";
-import { ApiRequestError, getBaseStateBlob, setBaseStateBlob } from "../api";
+import { ApiRequestError, getBaseStateBlob, getResources, setBaseStateBlob } from "../api";
 
 type BaseCell = BaseCellLayout;
 
@@ -132,11 +131,6 @@ const THREAT_FALLBACK_MS: Record<DebuffId, number> = {
 const FUD_PHRASES = ["Panic selling", "Fear spike", "Weak hands", "Exit now", "Red candles", "No conviction", "Sell pressure", "Trend breaks"];
 const IMPOSTOR_PHRASES = ["Build jammed", "Ops delay", "Fake signal", "System spoof", "Crew mismatch", "Command lost", "Queue blocked", "Access denied"];
 const KOL_PHRASES = ["BUY THE DIP", "MOON SOON", "INSIDE ALPHA", "WHALE ALERT", "MAX BULLISH", "PUMP SIGNAL", "ENTRY NOW", "SEND IT"];
-const TOAST_DRAIN_PER_SEC: Record<DebuffId, number> = {
-  fuders: 0.22,
-  kol_shills: 0.36,
-  impostors: 0.18
-};
 const GLOBAL_CHARGE_CAP_UI = 6;
 const GLOBAL_CHARGE_PERIOD_MS_UI = 60 * 60_000;
 
@@ -299,37 +293,8 @@ type BaseStateBlobPayload = {
   placements: Record<CellId, Placement | null>;
   buildingVisuals: Record<BuildingId, BuildingVisual>;
   buildQueue: BuildQueueState;
-  resourceState: ResourceState;
   mechanicsState: MechanicsState;
 };
-
-function parseResourceStateCandidate(candidate: unknown): ResourceState | null {
-  if (!candidate || typeof candidate !== "object") return null;
-  const value = candidate as {
-    res?: Partial<ResourceState["res"]>;
-    startedAtMs?: number;
-    lastTickMs?: number;
-  };
-  if (typeof value.startedAtMs !== "number" || typeof value.lastTickMs !== "number") return null;
-  if (!value.res || typeof value.res !== "object") return null;
-  const res = value.res;
-  const keys: Array<keyof ResourceState["res"]> = ["cash", "yield", "alpha", "tickets", "mon", "faith"];
-  for (const key of keys) {
-    if (typeof res[key] !== "number") return null;
-  }
-  return {
-    startedAtMs: value.startedAtMs,
-    lastTickMs: value.lastTickMs,
-    res: {
-      cash: res.cash as number,
-      yield: res.yield as number,
-      alpha: res.alpha as number,
-      tickets: res.tickets as number,
-      mon: res.mon as number,
-      faith: res.faith as number
-    }
-  };
-}
 
 function parseBlobState(raw: unknown): BaseStateBlobPayload | null {
   if (!raw || typeof raw !== "object") return null;
@@ -339,7 +304,6 @@ function parseBlobState(raw: unknown): BaseStateBlobPayload | null {
     placements?: unknown;
     buildingVisuals?: unknown;
     buildQueue?: unknown;
-    resourceState?: unknown;
     mechanicsState?: unknown;
   };
   if (candidate.version !== 1) return null;
@@ -347,16 +311,14 @@ function parseBlobState(raw: unknown): BaseStateBlobPayload | null {
   const placements = parseStoredPlacements(JSON.stringify(candidate.placements));
   const buildingVisuals = parseStoredBuildingVisuals(JSON.stringify(candidate.buildingVisuals));
   const buildQueue = parseStoredBuildQueue(JSON.stringify(candidate.buildQueue));
-  const resourceState = parseResourceStateCandidate(candidate.resourceState);
   const mechanicsState = clearDebuffs((candidate.mechanicsState as MechanicsState) ?? loadMechanicsState());
-  if (!cells || !placements || !buildingVisuals || !buildQueue || !resourceState) return null;
+  if (!cells || !placements || !buildingVisuals || !buildQueue) return null;
   return {
     version: 1,
     cells,
     placements,
     buildingVisuals,
     buildQueue,
-    resourceState,
     mechanicsState
   };
 }
@@ -368,7 +330,6 @@ function toBlobState(payload: BaseStateBlobPayload): Record<string, unknown> {
     placements: payload.placements,
     buildingVisuals: payload.buildingVisuals,
     buildQueue: payload.buildQueue,
-    resourceState: payload.resourceState,
     mechanicsState: payload.mechanicsState
   };
 }
@@ -610,6 +571,25 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
     toastsRef.current = toasts;
   }, [toasts]);
 
+  const syncResourcesFromServer = useCallback(async () => {
+    if (!token) return;
+    const result = await getResources(token);
+    const serverNow = Number.isFinite(result.serverNowMs) ? result.serverNowMs : nowMs();
+    setTickNowMs(serverNow);
+    setResourceState((prev) => ({
+      ...prev,
+      res: {
+        cash: result.resources.cash,
+        yield: result.resources.yield,
+        alpha: result.resources.alpha,
+        faith: result.resources.faith,
+        tickets: result.resources.tickets,
+        mon: result.resources.mon
+      },
+      lastTickMs: serverNow
+    }));
+  }, [token]);
+
   useEffect(() => {
     let cancelled = false;
     const bootstrap = async () => {
@@ -617,14 +597,13 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
       const baseDefaultCells = cloneCells(BASE_CELL_DEFAULTS);
       const baseDefaultPlacements = createDefaultPlacements();
       const baseDefaultQueue: BuildQueueState = { active: null, queued: [] };
-      const baseDefaultResources = tickResources(loadResourceState(), now);
+      const baseDefaultResources = loadResourceState();
       const baseDefaultMechanics = clearDebuffs(loadMechanicsState());
 
       let sourceCells = baseDefaultCells;
       let sourcePlacements = baseDefaultPlacements;
       let sourceBuildingVisuals = createDefaultBuildingVisuals();
       let sourceQueue = baseDefaultQueue;
-      let sourceResources = baseDefaultResources;
       let sourceMechanics = baseDefaultMechanics;
 
       if (token) {
@@ -637,7 +616,6 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
             sourcePlacements = parsed.placements;
             sourceBuildingVisuals = parsed.buildingVisuals;
             sourceQueue = parsed.buildQueue;
-            sourceResources = parsed.resourceState;
             sourceMechanics = parsed.mechanicsState;
           }
         } catch (error) {
@@ -649,26 +627,30 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
       const queueTicked = tick(sourceQueue, now);
       const placementsAfterQueue = applyCompletedJobsToPlacements(sourcePlacements, queueTicked.completed);
       setPassiveRatesFromPlacements(placementsAfterQueue);
-      const resourcesLoaded = tickResources(sourceResources, now);
       const mechanicsPruned = pruneExpiredDebuffs(sourceMechanics, now);
-      const mechanicsTicked = tickThreats(now, getDayIndex(resourcesLoaded, now), placementsAfterQueue, mechanicsPruned);
+      const mechanicsTicked = tickThreats(now, getDayIndex(baseDefaultResources, now), placementsAfterQueue, mechanicsPruned);
 
       if (cancelled) return;
       setCells(sourceCells);
       setPlacements(placementsAfterQueue);
       setBuildingVisuals(sourceBuildingVisuals);
       setBuildQueue(queueTicked.state);
-      setResourceState(resourcesLoaded);
+      setResourceState(baseDefaultResources);
       setMechanicsState(mechanicsTicked);
       setTickNowMs(now);
       isServerHydratedRef.current = true;
+      try {
+        await syncResourcesFromServer();
+      } catch (error) {
+        console.warn("[BaseScreen] failed to load server resources", error);
+      }
     };
     void bootstrap();
     return () => {
       cancelled = true;
       isServerHydratedRef.current = false;
     };
-  }, [token]);
+  }, [syncResourcesFromServer, token]);
 
   useEffect(() => {
     if (!token || !isServerHydratedRef.current) return;
@@ -684,7 +666,6 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
         placements,
         buildingVisuals,
         buildQueue,
-        resourceState,
         mechanicsState
       };
       try {
@@ -703,9 +684,13 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
               setPlacements(parsed.placements);
               setBuildingVisuals(parsed.buildingVisuals);
               setBuildQueue(parsed.buildQueue);
-              setResourceState(tickResources(parsed.resourceState, now));
               setMechanicsState(pruneExpiredDebuffs(parsed.mechanicsState, now));
               setTickNowMs(now);
+              try {
+                await syncResourcesFromServer();
+              } catch (syncError) {
+                console.warn("[BaseScreen] failed to sync resources after conflict", syncError);
+              }
             }
           } catch (reloadError) {
             console.warn("[BaseScreen] failed to resolve state conflict", reloadError);
@@ -725,7 +710,15 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
         saveBlobTimerRef.current = null;
       }
     };
-  }, [token, cells, placements, buildingVisuals, buildQueue, resourceState, mechanicsState]);
+  }, [token, cells, placements, buildingVisuals, buildQueue, mechanicsState, syncResourcesFromServer]);
+
+  useEffect(() => {
+    if (!token || !isServerHydratedRef.current) return;
+    const timer = window.setInterval(() => {
+      void syncResourcesFromServer();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [syncResourcesFromServer, token]);
 
   useEffect(() => {
     setPassiveRatesFromPlacements(placements);
@@ -855,17 +848,6 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
       if (extraSwarmDrain <= 0) {
         extraSwarmDrain = getSwarmExtraDrainPerSec(swarmStateRef.current);
       }
-      const extraToastDrain = toastsRef.current.reduce((sum, toast) => sum + TOAST_DRAIN_PER_SEC[toast.debuff], 0);
-      const mods = getThreatModifiers(mechanicsState, now);
-      const hasTweetDrivenDebuff = mechanicsState.debuffs.some((item) => item.id === "fuders" || item.id === "kol_shills");
-      const threatCashDrain = hasTweetDrivenDebuff ? 0 : mods.cashDrainPerSec;
-      setResourceState((prev) => {
-        return tickResources(prev, now, {
-          passiveYieldMul: mods.passiveYieldMul,
-          passiveAlphaMul: mods.passiveAlphaMul,
-          cashDrainPerSec: threatCashDrain + extraSwarmDrain + extraToastDrain
-        });
-      });
       setMechanicsState((prev) => tickThreats(now, getDayIndex(resourceState, now), placements, prev));
     }, 250);
     return () => window.clearInterval(timer);
@@ -1633,6 +1615,7 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
       costPaid: true
     };
     setBuildQueue((prev) => enqueueJob(prev, job));
+    void syncResourcesFromServer();
   };
 
   const enqueueUpgradeForSelectedCell = () => {
@@ -1668,6 +1651,7 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
       costPaid: true
     };
     setBuildQueue((prev) => enqueueJob(prev, job));
+    void syncResourcesFromServer();
   };
 
   const completeActiveNow = () => {
@@ -1768,6 +1752,7 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
     setResourceState(nextResourceState);
     setMechanicsState(result.newMech);
     setActionMessage(result.toastEn || "Action complete");
+    void syncResourcesFromServer();
     if (selectedCenter) {
       spawnFx("confettiPop", selectedCenter.x, selectedCenter.y);
     }
@@ -1777,6 +1762,7 @@ export function BaseScreen({ token, onBack, onTrenches }: BaseScreenProps) {
     selectedCellId,
     selectedPlacement,
     selectedCenter,
+    syncResourcesFromServer,
     spawnFx,
     tickNowMs
   ]);

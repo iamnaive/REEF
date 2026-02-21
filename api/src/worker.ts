@@ -51,6 +51,18 @@ const MATCH_BANK_MAX = MATCH_LIMIT_PER_DAY * MATCH_BANK_DAY_CAP;
 const MAX_RECENT_PROJECTIONS_PER_WEATHER = 20;
 const BASE_BLOB_MAX_CHARS = 200_000;
 const BASE_BLOB_WRITE_COOLDOWN_MS = 2_000;
+const MAX_RESOURCES_OFFLINE_MS = 12 * 60 * 60 * 1000;
+const SHARD_MINE_CASH_PER_HOUR_BY_LEVEL = [80, 180, 320, 500];
+const PEARL_GROTTO_YIELD_PER_HOUR_BY_LEVEL = [35, 80, 150, 240];
+const TRAINING_REEF_ALPHA_PER_HOUR_BY_LEVEL = [20, 48, 90, 150];
+const INITIAL_PLAYER_RESOURCES = {
+  cash: 600,
+  yield: 0,
+  alpha: 0,
+  faith: 0,
+  tickets: 1,
+  mon: 0
+} as const;
 const baseBlobWriteGuard = new Map<string, number>();
 router.options("*", () => new Response(null, { headers: CORS_HEADERS }));
 
@@ -893,24 +905,36 @@ router.get("/api/base", async (request: Request, env: Env) => {
   return json(base);
 });
 
+router.get("/api/resources", async (request: Request, env: Env) => {
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ error: "Unauthorized" }, 401);
+  const nowMs = Date.now();
+  const resources = await tickAuthoritativeResources(env, auth.address, nowMs);
+  return json({ resources, serverNowMs: nowMs });
+});
+
 router.post("/api/base/build", async (request: Request, env: Env) => {
-  const auth = await requirePaidAuth(request, env);
-  if (!auth) return json({ error: "Payment required" }, 402);
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ error: "Unauthorized" }, 401);
 
   const body = await readBody(request);
   const schema = z.object({
-    buildingType: z.enum(["shard_mine", "pearl_grotto", "training_reef", "storage_vault"])
+    buildingType: z.string()
   });
   const parsed = schema.safeParse(body);
   if (!parsed.success) return json({ error: "Invalid payload" }, 400);
-
+  const allowedTypes: BuildingType[] = ["shard_mine", "pearl_grotto", "training_reef", "storage_vault"];
+  if (!allowedTypes.includes(parsed.data.buildingType as BuildingType)) {
+    const resources = await tickAuthoritativeResources(env, auth.address, Date.now());
+    return json({ error: "UNSUPPORTED_BUILDING", resources }, 400);
+  }
   const buildingType = parsed.data.buildingType as BuildingType;
   const def = BUILDINGS.find((b) => b.id === buildingType);
-  if (!def) return json({ error: "Unknown building" }, 404);
+  if (!def) return json({ error: "UNSUPPORTED_BUILDING" }, 400);
 
   await ensureBaseTable(env);
-  await ensureLeaderboardTable(env);
-
+  const nowMs = Date.now();
+  const resourcesBefore = await tickAuthoritativeResources(env, auth.address, nowMs);
   // Check if player already has this building
   const existing = await env.DB.prepare(
     "SELECT id, level FROM base_buildings WHERE address = ? AND building_type = ?"
@@ -940,12 +964,20 @@ router.post("/api/base/build", async (request: Request, env: Env) => {
 
   const cost = def.costs[targetLevel - 1];
   if (!cost) return json({ error: "Invalid level" }, 400);
-
-  const resources = await getResources(env, auth.address);
-  if (resources.coins < cost.coins) return json({ error: "Not enough coins" }, 400);
-  if (resources.pearls < cost.pearls) return json({ error: "Not enough pearls" }, 400);
+  if (resourcesBefore.cash < cost.coins || resourcesBefore.yield < cost.pearls) {
+    return json(
+      {
+        error: "INSUFFICIENT_FUNDS",
+        resources: resourcesBefore
+      },
+      400
+    );
+  }
 
   const now = new Date().toISOString();
+
+  const nextCash = Math.max(0, resourcesBefore.cash - cost.coins);
+  const nextYield = Math.max(0, resourcesBefore.yield - cost.pearls);
 
   if (existing) {
     // Upgrade: deduct resources and increase level
@@ -954,8 +986,8 @@ router.post("/api/base/build", async (request: Request, env: Env) => {
         "UPDATE base_buildings SET level = ? WHERE id = ?"
       ).bind(targetLevel, buildingId),
       env.DB.prepare(
-        "UPDATE leaderboard_stats SET coins = coins - ?, pearls = pearls - ?, updated_at = ? WHERE address = ?"
-      ).bind(cost.coins, cost.pearls, now, auth.address)
+        "UPDATE player_resources SET cash = ?, yield = ?, updated_at = ? WHERE address = ?"
+      ).bind(nextCash, nextYield, now, auth.address)
     ]);
   } else {
     // New build: insert building and deduct resources
@@ -964,12 +996,12 @@ router.post("/api/base/build", async (request: Request, env: Env) => {
         "INSERT INTO base_buildings (id, address, building_type, level, last_collected_at, created_at) VALUES (?, ?, ?, 1, ?, ?)"
       ).bind(buildingId, auth.address, buildingType, now, now),
       env.DB.prepare(
-        "UPDATE leaderboard_stats SET coins = coins - ?, pearls = pearls - ?, updated_at = ? WHERE address = ?"
-      ).bind(cost.coins, cost.pearls, now, auth.address)
+        "UPDATE player_resources SET cash = ?, yield = ?, updated_at = ? WHERE address = ?"
+      ).bind(nextCash, nextYield, now, auth.address)
     ]);
   }
 
-  const updatedResources = await getResources(env, auth.address);
+  const updatedResources = await getAuthoritativeResources(env, auth.address);
   const base = await getBaseState(env, auth.address);
   await logEvent(env, auth.address, "base_build", { buildingType, targetLevel }, request);
 
@@ -977,79 +1009,15 @@ router.post("/api/base/build", async (request: Request, env: Env) => {
 });
 
 router.post("/api/base/collect", async (request: Request, env: Env) => {
-  const auth = await requirePaidAuth(request, env);
-  if (!auth) return json({ error: "Payment required" }, 402);
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ error: "Unauthorized" }, 401);
 
-  await ensureBaseTable(env);
-  await ensureLeaderboardTable(env);
-
-  const buildings = await env.DB.prepare(
-    "SELECT id, building_type, level, last_collected_at FROM base_buildings WHERE address = ?"
-  ).bind(auth.address).all<{
-    id: string;
-    building_type: string;
-    level: number;
-    last_collected_at: string;
-  }>();
-
-  // Calculate max accumulation hours (base 4h + 2h per storage_vault level)
-  let maxAccumHours = 4;
-  for (const b of buildings.results) {
-    if (b.building_type === "storage_vault") {
-      maxAccumHours += b.level * 2;
-    }
-  }
-
-  let totalShards = 0;
-  let totalPearls = 0;
-  const now = new Date();
-  const nowIso = now.toISOString();
-
-  const updateStmts = [];
-
-  for (const b of buildings.results) {
-    const def = BUILDINGS.find((bd) => bd.id === b.building_type);
-    if (!def || def.produces === "buff") continue;
-
-    const lastCollected = new Date(b.last_collected_at);
-    const hoursElapsed = Math.min(
-      maxAccumHours,
-      (now.getTime() - lastCollected.getTime()) / 3600000
-    );
-
-    if (hoursElapsed < 0.01) continue; // less than ~36 seconds, skip
-
-    const rate = def.productionPerHour[b.level - 1] || 0;
-    const produced = Math.floor(rate * hoursElapsed);
-
-    if (produced <= 0) continue;
-
-    if (def.produces === "shards") totalShards += produced;
-    if (def.produces === "pearls") totalPearls += produced;
-
-    updateStmts.push(
-      env.DB.prepare("UPDATE base_buildings SET last_collected_at = ? WHERE id = ?")
-        .bind(nowIso, b.id)
-    );
-  }
-
-  if (totalShards > 0 || totalPearls > 0) {
-    updateStmts.push(
-      env.DB.prepare(
-        "UPDATE leaderboard_stats SET shards = shards + ?, pearls = pearls + ?, updated_at = ? WHERE address = ?"
-      ).bind(totalShards, totalPearls, nowIso, auth.address)
-    );
-  }
-
-  if (updateStmts.length > 0) {
-    await env.DB.batch(updateStmts);
-  }
-
-  const resources = await getResources(env, auth.address);
+  const nowMs = Date.now();
+  const resources = await tickAuthoritativeResources(env, auth.address, nowMs);
   const base = await getBaseState(env, auth.address);
-  await logEvent(env, auth.address, "base_collect", { shards: totalShards, pearls: totalPearls }, request);
+  await logEvent(env, auth.address, "base_collect", { cash: resources.cash, yield: resources.yield }, request);
 
-  return json({ base, resources, collected: { shards: totalShards, pearls: totalPearls } });
+  return json({ base, resources, collected: { shards: 0, pearls: 0 }, serverNowMs: nowMs });
 });
 
 router.get("/api/base/state", async (request: Request, env: Env) => {
@@ -1604,6 +1572,9 @@ async function ensureCoreTables(env: Env) {
     ),
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS base_state_blobs (address TEXT PRIMARY KEY, state_json TEXT NOT NULL, updated_at TEXT NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS player_resources (address TEXT PRIMARY KEY, cash INTEGER NOT NULL DEFAULT 0, yield INTEGER NOT NULL DEFAULT 0, alpha INTEGER NOT NULL DEFAULT 0, faith INTEGER NOT NULL DEFAULT 0, tickets INTEGER NOT NULL DEFAULT 0, mon INTEGER NOT NULL DEFAULT 0, last_tick_ms INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)"
     )
   ]);
   coreTablesReady = true;
@@ -1641,6 +1612,141 @@ async function getResources(env: Env, address: string): Promise<ResourceTotals> 
     coins: row?.coins || 0,
     pearls: row?.pearls || 0,
     shards: row?.shards || 0
+  };
+}
+
+type AuthoritativeResources = {
+  cash: number;
+  yield: number;
+  alpha: number;
+  faith: number;
+  tickets: number;
+  mon: number;
+  lastTickMs: number;
+  updatedAt: string;
+};
+
+let playerResourcesTableReady = false;
+async function ensurePlayerResourcesTable(env: Env) {
+  if (playerResourcesTableReady) return;
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS player_resources (address TEXT PRIMARY KEY, cash INTEGER NOT NULL DEFAULT 0, yield INTEGER NOT NULL DEFAULT 0, alpha INTEGER NOT NULL DEFAULT 0, faith INTEGER NOT NULL DEFAULT 0, tickets INTEGER NOT NULL DEFAULT 0, mon INTEGER NOT NULL DEFAULT 0, last_tick_ms INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)"
+  ).run();
+  playerResourcesTableReady = true;
+}
+
+async function ensurePlayerResourcesRow(env: Env, address: string, nowMs: number) {
+  await ensurePlayerResourcesTable(env);
+  const nowIso = new Date(nowMs).toISOString();
+  await env.DB.prepare(
+    "INSERT INTO player_resources (address, cash, yield, alpha, faith, tickets, mon, last_tick_ms, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(address) DO NOTHING"
+  )
+    .bind(
+      address,
+      INITIAL_PLAYER_RESOURCES.cash,
+      INITIAL_PLAYER_RESOURCES.yield,
+      INITIAL_PLAYER_RESOURCES.alpha,
+      INITIAL_PLAYER_RESOURCES.faith,
+      INITIAL_PLAYER_RESOURCES.tickets,
+      INITIAL_PLAYER_RESOURCES.mon,
+      nowMs,
+      nowIso
+    )
+    .run();
+}
+
+async function getAuthoritativeResources(env: Env, address: string): Promise<AuthoritativeResources> {
+  await ensurePlayerResourcesTable(env);
+  const row = await env.DB.prepare(
+    "SELECT cash, yield, alpha, faith, tickets, mon, last_tick_ms, updated_at FROM player_resources WHERE address = ?"
+  )
+    .bind(address)
+    .first<{
+      cash: number;
+      yield: number;
+      alpha: number;
+      faith: number;
+      tickets: number;
+      mon: number;
+      last_tick_ms: number;
+      updated_at: string;
+    }>();
+  if (!row) {
+    const nowMs = Date.now();
+    await ensurePlayerResourcesRow(env, address, nowMs);
+    return getAuthoritativeResources(env, address);
+  }
+  return {
+    cash: row.cash || 0,
+    yield: row.yield || 0,
+    alpha: row.alpha || 0,
+    faith: row.faith || 0,
+    tickets: row.tickets || 0,
+    mon: row.mon || 0,
+    lastTickMs: row.last_tick_ms || 0,
+    updatedAt: row.updated_at || new Date().toISOString()
+  };
+}
+
+function getPassiveHourlyRatesForBase(buildings: Array<{ building_type: string; level: number }>) {
+  let cashPerHour = 0;
+  let yieldPerHour = 0;
+  let alphaPerHour = 0;
+
+  buildings.forEach((building) => {
+    const levelIndex = Math.max(0, Math.min(3, (building.level || 1) - 1));
+    if (building.building_type === "shard_mine") {
+      cashPerHour += SHARD_MINE_CASH_PER_HOUR_BY_LEVEL[levelIndex] ?? 0;
+    } else if (building.building_type === "pearl_grotto") {
+      yieldPerHour += PEARL_GROTTO_YIELD_PER_HOUR_BY_LEVEL[levelIndex] ?? 0;
+    } else if (building.building_type === "training_reef") {
+      alphaPerHour += TRAINING_REEF_ALPHA_PER_HOUR_BY_LEVEL[levelIndex] ?? 0;
+    }
+  });
+
+  return { cashPerHour, yieldPerHour, alphaPerHour };
+}
+
+async function tickAuthoritativeResources(
+  env: Env,
+  address: string,
+  nowMs: number
+): Promise<AuthoritativeResources> {
+  await ensurePlayerResourcesRow(env, address, nowMs);
+  const current = await getAuthoritativeResources(env, address);
+  const dtMsRaw = Math.max(0, nowMs - current.lastTickMs);
+  const dtMs = Math.min(MAX_RESOURCES_OFFLINE_MS, dtMsRaw);
+  const dtHours = dtMs / 3_600_000;
+  if (dtHours <= 0) {
+    return current;
+  }
+
+  await ensureBaseTable(env);
+  const buildings = await env.DB.prepare(
+    "SELECT building_type, level FROM base_buildings WHERE address = ?"
+  )
+    .bind(address)
+    .all<{ building_type: string; level: number }>();
+
+  const rates = getPassiveHourlyRatesForBase(buildings.results ?? []);
+  const nextCash = current.cash + Math.floor(rates.cashPerHour * dtHours);
+  const nextYield = current.yield + Math.floor(rates.yieldPerHour * dtHours);
+  const nextAlpha = current.alpha + Math.floor(rates.alphaPerHour * dtHours);
+  const updatedAt = new Date(nowMs).toISOString();
+
+  await env.DB.prepare(
+    "UPDATE player_resources SET cash = ?, yield = ?, alpha = ?, last_tick_ms = ?, updated_at = ? WHERE address = ?"
+  )
+    .bind(nextCash, nextYield, nextAlpha, nowMs, updatedAt, address)
+    .run();
+
+  return {
+    ...current,
+    cash: nextCash,
+    yield: nextYield,
+    alpha: nextAlpha,
+    lastTickMs: nowMs,
+    updatedAt
   };
 }
 

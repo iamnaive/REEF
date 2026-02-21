@@ -155,6 +155,18 @@ CREATE TABLE IF NOT EXISTS base_state_blobs (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS player_resources (
+  address TEXT PRIMARY KEY,
+  cash INTEGER NOT NULL DEFAULT 0,
+  yield INTEGER NOT NULL DEFAULT 0,
+  alpha INTEGER NOT NULL DEFAULT 0,
+  faith INTEGER NOT NULL DEFAULT 0,
+  tickets INTEGER NOT NULL DEFAULT 0,
+  mon INTEGER NOT NULL DEFAULT 0,
+  last_tick_ms INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
 CREATE INDEX IF NOT EXISTS idx_daily_limits_address_day ON daily_limits (address, day_key);
 CREATE INDEX IF NOT EXISTS idx_match_bank_address ON match_bank (address);

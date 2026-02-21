@@ -26,6 +26,17 @@ export class ApiRequestError extends Error {
   }
 }
 
+export type BaseAuthoritativeResources = {
+  cash: number;
+  yield: number;
+  alpha: number;
+  faith: number;
+  tickets: number;
+  mon: number;
+  lastTickMs: number;
+  updatedAt: string;
+};
+
 function getHeaders(token?: string, idempotencyKey?: string) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
@@ -278,4 +289,18 @@ export async function setBaseStateBlob(
     throw new ApiRequestError("Failed to save base state blob", res.status, details);
   }
   return (await res.json()) as { ok: true; updatedAt: string };
+}
+
+export async function getResources(token: string) {
+  const res = await fetch(`${API_BASE}/api/resources`, {
+    headers: getHeaders(token)
+  });
+  if (!res.ok) {
+    const details = await res.json().catch(() => null);
+    throw new ApiRequestError("Failed to load resources", res.status, details);
+  }
+  return (await res.json()) as {
+    resources: BaseAuthoritativeResources;
+    serverNowMs: number;
+  };
 }
