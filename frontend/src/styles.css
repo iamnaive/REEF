@@ -4903,6 +4903,10 @@ body.base-screen-no-scroll {
     height: clamp(96px, 22vw, 180px);
   }
 
+  .base-screen-root {
+    touch-action: auto;
+  }
+
   /* ── Top HUD — single scrollable strip ── */
   .bs-top-hud {
     top: max(4px, env(safe-area-inset-top));
@@ -4918,6 +4922,7 @@ body.base-screen-no-scroll {
     overflow-y: hidden;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
     background: linear-gradient(180deg, rgba(20, 82, 108, 0.82), rgba(14, 62, 86, 0.88));
     border-color: rgba(130, 210, 240, 0.35);
   }
@@ -5057,6 +5062,7 @@ body.base-screen-no-scroll {
     overflow-y: auto;
     overflow-x: hidden;
     overscroll-behavior: contain;
+    touch-action: pan-y;
   }
 
   .base-build-title {
