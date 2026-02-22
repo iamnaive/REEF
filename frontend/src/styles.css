@@ -4907,6 +4907,155 @@ body.base-screen-no-scroll {
     touch-action: auto;
   }
 
+  /* ── Prematch screen — vertical stacked layout ── */
+  .panel.prematch-panel {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: calc(100dvh - 80px);
+    padding: 8px;
+    border-radius: 12px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .prematch-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+    height: auto;
+  }
+
+  .prematch-left {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .hero-showcase {
+    width: 90px;
+    height: 90px;
+    flex: 0 0 90px;
+    transform: none;
+  }
+
+  .hero-showcase img {
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .lineup-section {
+    flex: 1;
+    transform: none;
+    padding-left: 0;
+    gap: 4px;
+    align-items: flex-start;
+  }
+
+  .lineup-section .label {
+    font-size: 10px;
+    font-weight: 700;
+    opacity: 0.7;
+  }
+
+  .lineup-slots {
+    gap: 5px;
+    margin: 2px 0 4px;
+    justify-content: flex-start;
+  }
+
+  .lineup-slot,
+  .hero-picker.icons .hero-icon,
+  .hero-icon {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    min-height: 52px;
+    max-width: 52px;
+    max-height: 52px;
+    flex: 0 0 52px;
+    border-radius: 8px;
+  }
+
+  .lineup-slot .slot-index {
+    font-size: 8px;
+    right: 3px;
+    bottom: 2px;
+  }
+
+  .hero-picker.icons {
+    gap: 5px;
+  }
+
+  .prematch-card {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    padding: 16px 12px 12px;
+    border-radius: 12px;
+    background-size: 100% 100%;
+  }
+
+  .prematch-card-body {
+    gap: 10px;
+  }
+
+  .match-info-weather {
+    margin-left: 0;
+    margin-top: 0;
+    padding: 0;
+  }
+
+  .weather-card.large img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .weather-content {
+    gap: 8px;
+  }
+
+  .prematch-card .label {
+    font-size: 9px;
+    margin-bottom: 1px;
+  }
+
+  .prematch-card .value {
+    font-size: 14px;
+    line-height: 1.15;
+  }
+
+  .prematch-card .hint,
+  .match-info-bonuses ul li {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .match-info-row {
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+  }
+
+  .match-info-matches,
+  .match-info-bonuses {
+    padding: 0;
+    margin: 0;
+  }
+
+  .match-info-bonuses ul {
+    margin: 2px 0 0;
+    padding-left: 12px;
+  }
+
+  .match-start-button {
+    max-width: 200px;
+    height: 50px;
+    margin-top: 0;
+    align-self: center;
+  }
+
   /* ── Top HUD — single scrollable strip ── */
   .bs-top-hud {
     top: max(4px, env(safe-area-inset-top));
