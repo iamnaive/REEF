@@ -1352,7 +1352,9 @@ router.post("/api/action/perform", async (request: Request, env: Env) => {
           charges: readyState.charges,
           chargeCap: config.chargeCap,
           remainingMs: gate.remainingMs ?? 0,
-          nextRegenMs: gate.nextRegenMs ?? 0,
+          nextRegenMs: config.regenMsPerCharge,
+          cooldownMs: config.cooldownMs,
+          cooldownEndMs: gate.code === "COOLDOWN" ? nowMs + (gate.remainingMs ?? 0) : 0,
           dailyCount: readyState.dailyCount,
           dailyCap: config.dailyCap
         },
@@ -1438,6 +1440,8 @@ router.post("/api/action/perform", async (request: Request, env: Env) => {
       chargeCap: config.chargeCap,
       remainingMs: config.cooldownMs,
       nextRegenMs: config.regenMsPerCharge,
+      cooldownMs: config.cooldownMs,
+      cooldownEndMs: nowMs + config.cooldownMs,
       dailyCount: nextState.dailyCount,
       dailyCap: config.dailyCap
     },

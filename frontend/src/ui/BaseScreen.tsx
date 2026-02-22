@@ -510,7 +510,7 @@ function getServerCharges(
   actionKey: string,
   nowMs: number,
   serverStates: Record<string, ServerActionState>
-): { charges: number; cap: number; nextChargeInMs: number } | null {
+): { charges: number; cap: number; nextChargeInMs: number; cooldownRemainingMs: number } | null {
   const state = serverStates[actionKey];
   if (!state) return null;
   const sinceReceived = Math.max(0, nowMs - state.receivedAtMs);
@@ -519,10 +519,14 @@ function getServerCharges(
     regenned = Math.floor(sinceReceived / state.regenMsPerCharge);
   }
   const charges = Math.min(state.chargeCap, state.charges + regenned);
-  const nextChargeInMs = charges >= state.chargeCap
-    ? 0
-    : Math.max(0, state.regenMsPerCharge - (sinceReceived % state.regenMsPerCharge));
-  return { charges, cap: state.chargeCap, nextChargeInMs };
+  let nextChargeInMs = 0;
+  if (charges < state.chargeCap && state.regenMsPerCharge > 0) {
+    nextChargeInMs = Math.max(0, state.regenMsPerCharge - (sinceReceived % state.regenMsPerCharge));
+  }
+  const cooldownRemainingMs = state.cooldownEndMs > 0
+    ? Math.max(0, state.cooldownEndMs - nowMs)
+    : 0;
+  return { charges, cap: state.chargeCap, nextChargeInMs, cooldownRemainingMs };
 }
 
 export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenches }: BaseScreenProps) {
@@ -705,7 +709,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
         const now = Date.now();
         const withTimestamp: Record<string, ServerActionState> = {};
         for (const [key, state] of Object.entries(result.states)) {
-          withTimestamp[key] = { ...state, receivedAtMs: now };
+          withTimestamp[key] = { ...state, receivedAtMs: now, cooldownEndMs: 0 };
         }
         setServerActionStates(withTimestamp);
         serverStatesLoadedRef.current = true;
@@ -1959,8 +1963,8 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
       return buildingDef.actionsEn.some((action) => {
         const actionKey = getActionCooldownKey(cellId, placement.buildingId, action.id);
         const serverCharge = token ? getServerCharges(actionKey, currentNowMs, serverActionStates) : null;
-        const chargeInfo = serverCharge ?? getCharges(actionKey, currentNowMs, mech);
-        if (chargeInfo.charges <= 0) return false;
+        const chargeInfo = serverCharge ?? { ...getCharges(actionKey, currentNowMs, mech), cooldownRemainingMs: 0 };
+        if (chargeInfo.charges <= 0 || chargeInfo.cooldownRemainingMs > 0) return false;
         const cost = action.cost
           ? {
               ...action.cost,
@@ -2000,12 +2004,13 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
             [serverActionKey]: {
               charges: res.actionState!.charges,
               chargeCap: res.actionState!.chargeCap,
-              cooldownMs: res.actionState!.remainingMs,
+              cooldownMs: res.actionState!.cooldownMs ?? res.actionState!.remainingMs,
               regenMsPerCharge: res.actionState!.nextRegenMs,
               lastActionMs: res.serverNowMs,
               dailyCount: res.actionState!.dailyCount,
               dailyCap: res.actionState!.dailyCap,
-              receivedAtMs: Date.now()
+              receivedAtMs: Date.now(),
+              cooldownEndMs: res.actionState!.cooldownEndMs ?? (Date.now() + (res.actionState!.remainingMs || 0))
             }
           }));
         }
@@ -2023,18 +2028,34 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
             serverNowMs?: number;
           } | undefined;
           if (details?.state && serverActionKey) {
+            const st = details.state!;
             setServerActionStates((prev) => ({
               ...prev,
               [serverActionKey]: {
-                charges: details.state!.charges ?? 0,
-                chargeCap: details.state!.chargeCap ?? 1,
-                cooldownMs: details.state!.remainingMs ?? 0,
-                regenMsPerCharge: details.state!.nextRegenMs ?? 0,
+                charges: st.charges ?? 0,
+                chargeCap: st.chargeCap ?? 1,
+                cooldownMs: (st as Record<string, unknown>).cooldownMs as number ?? st.remainingMs ?? 0,
+                regenMsPerCharge: st.nextRegenMs ?? prev[serverActionKey]?.regenMsPerCharge ?? 0,
                 lastActionMs: details.serverNowMs ?? Date.now(),
-                dailyCount: details.state!.dailyCount ?? 0,
-                dailyCap: details.state!.dailyCap ?? 0,
-                receivedAtMs: Date.now()
+                dailyCount: st.dailyCount ?? 0,
+                dailyCap: st.dailyCap ?? 0,
+                receivedAtMs: Date.now(),
+                cooldownEndMs: (st as Record<string, unknown>).cooldownEndMs as number ?? (st.remainingMs ? Date.now() + st.remainingMs : 0)
               }
+            }));
+          }
+          if (details?.resources) {
+            setResourceState((prev) => ({
+              ...prev,
+              res: {
+                cash: details.resources!.cash,
+                yield: details.resources!.yield,
+                alpha: details.resources!.alpha,
+                faith: details.resources!.faith,
+                tickets: details.resources!.tickets,
+                mon: details.resources!.mon
+              },
+              lastTickMs: details.serverNowMs || prev.lastTickMs
             }));
           }
           if (details?.code === "COOLDOWN" && details?.state?.remainingMs != null) {
@@ -2735,7 +2756,8 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                 {selectedBuildingDef.actionsEn.map((action) => {
                   const actionKey = getActionCooldownKey(selectedCellId, selectedPlacement.buildingId, action.id);
                   const serverCharge = token ? getServerCharges(actionKey, tickNowMs, serverActionStates) : null;
-                  const chargeInfo = serverCharge ?? getCharges(actionKey, tickNowMs, mechanicsState);
+                  const chargeInfo = serverCharge ?? { ...getCharges(actionKey, tickNowMs, mechanicsState), cooldownRemainingMs: 0 };
+                  const cooldownActive = chargeInfo.cooldownRemainingMs > 0;
                   const mods = getThreatModifiers(mechanicsState, tickNowMs);
                   const cost = action.cost
                     ? {
@@ -2745,8 +2767,10 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                     : {};
                   const affordability = canAfford(resourceState.res, (cost ?? {}) as TierCost & { yield?: number; faith?: number }, dayIndex);
                   const hasCharges = chargeInfo.charges > 0;
-                  const canUse = hasCharges && affordability.ok;
-                  const disabledReason = hasCharges && !affordability.ok ? affordability.reason : "";
+                  const canUse = hasCharges && affordability.ok && !cooldownActive;
+                  const disabledReason = cooldownActive
+                    ? `Cooldown: ${formatMs(chargeInfo.cooldownRemainingMs)}`
+                    : hasCharges && !affordability.ok ? affordability.reason : "";
                   const gainChips = toResourceChips(action.reward, "+");
                   const costChips = toResourceChips(cost as Partial<Record<UiResourceKey, number>>, "-");
                   const nextText = chargeInfo.charges < chargeInfo.cap ? formatMs(chargeInfo.nextChargeInMs) : "Ready";
@@ -2766,7 +2790,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                       </div>
                       <div className="rr-chip-row">
                         <span className="rr-chip rr-chip--meta">Charges {chargeInfo.charges}/{chargeInfo.cap}</span>
-                        <span className="rr-chip rr-chip--meta">Next {nextText}</span>
+                        <span className="rr-chip rr-chip--meta">{cooldownActive ? `CD ${formatMs(chargeInfo.cooldownRemainingMs)}` : `Next ${nextText}`}</span>
                         {showCoveredChip && (
                           <span className="rr-chip rr-chip--cond">{tickNowMs < mechanicsState.coverageUntilMs ? "IF Covered" : "IF Not Covered"}</span>
                         )}
@@ -2774,7 +2798,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                           <span className="rr-chip rr-chip--cond">{`Mode: ${mechanicsState.yieldMode === "aggro" ? "Aggro" : "Safe"}`}</span>
                         )}
                       </div>
-                      {microline && <div className="base-action-cost">{microline}</div>}
+                      {disabledReason && <div className="base-action-cost">{disabledReason}</div>}
                       <button
                         className="base-build-action base-sidebar-build-btn rr-shine-btn"
                         onClick={(event) => {
@@ -2783,7 +2807,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                         }}
                         disabled={!canUse}
                       >
-                        Claim
+                        {cooldownActive ? `CD ${formatMs(chargeInfo.cooldownRemainingMs)}` : "Claim"}
                       </button>
                       {disabledReason && <div className="base-build-cost">{disabledReason}</div>}
                     </div>

@@ -314,6 +314,7 @@ export interface ServerActionState {
   dailyCount: number;
   dailyCap: number;
   receivedAtMs: number;
+  cooldownEndMs: number;
 }
 
 export async function getActionStates(token: string) {
@@ -353,6 +354,8 @@ export async function performAction(
       chargeCap: number;
       remainingMs: number;
       nextRegenMs: number;
+      cooldownMs?: number;
+      cooldownEndMs?: number;
       dailyCount: number;
       dailyCap: number;
     };
