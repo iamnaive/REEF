@@ -1505,14 +1505,29 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
     }, 260);
   }, []);
 
+  const triggerScreenFlash = useCallback((type: "spend" | "earn") => {
+    const el = rootRef.current;
+    if (!el) return;
+    const cls = type === "spend" ? "rr-spend-flash" : "rr-earn-flash";
+    el.classList.remove("rr-spend-flash", "rr-earn-flash");
+    void el.offsetWidth;
+    el.classList.add(cls);
+    const timer = window.setTimeout(() => el.classList.remove(cls), 550);
+    shineTimerRef.current.push(timer);
+  }, []);
+
   useEffect(() => {
     const prev = prevResRef.current;
     const curr = resourceState.res;
+    const gained = curr.cash > prev.cash || curr.yield > prev.yield || curr.alpha > prev.alpha;
+    const lost = curr.cash < prev.cash || curr.yield < prev.yield || curr.alpha < prev.alpha;
     if (curr.cash > prev.cash) triggerHudPulse("cash");
     if (curr.yield > prev.yield) triggerHudPulse("yield");
     if (curr.alpha > prev.alpha) triggerHudPulse("alpha");
+    if (lost) triggerScreenFlash("spend");
+    else if (gained) triggerScreenFlash("earn");
     prevResRef.current = curr;
-  }, [resourceState.res, triggerHudPulse]);
+  }, [resourceState.res, triggerHudPulse, triggerScreenFlash]);
 
   useEffect(() => {
     if (!devMode) return;
