@@ -492,15 +492,11 @@ function getServerActionKey(buildingId: BuildingId, actionId: string): string | 
   if ((buildingId as string) === "training_reef" && (actionId === "activate" || actionId === "activate_training_reef")) {
     return "activate:training_reef";
   }
-  return null;
+  return `${buildingId}:${actionId}`;
 }
 
-function getServerBuildingType(buildingId: BuildingId): "shard_mine" | "pearl_grotto" | "training_reef" | "storage_vault" | null {
-  if (buildingId === ("shard_mine" as BuildingId)) return "shard_mine";
-  if (buildingId === ("pearl_grotto" as BuildingId)) return "pearl_grotto";
-  if (buildingId === ("training_reef" as BuildingId)) return "training_reef";
-  if (buildingId === ("storage_vault" as BuildingId)) return "storage_vault";
-  return null;
+function getServerBuildingType(buildingId: BuildingId): string | null {
+  return buildingId;
 }
 
 function getNextTier(tier: Tier): Tier | null {
@@ -1780,10 +1776,12 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
     if (!buildingEconomy) return;
     const buildTier = buildingEconomy.tiers[1];
     const serverBuildingType = getServerBuildingType(pendingBuildId);
+    let serverPaid = false;
     if (token && serverBuildingType) {
       try {
         const response = await buildOrUpgrade(token, serverBuildingType);
         applyServerResources(response.resources as ServerResourceLike);
+        serverPaid = true;
       } catch (error) {
         const message =
           error instanceof ApiRequestError
@@ -1794,24 +1792,18 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
         return;
       }
     }
-    const affordability = canAfford(resourceState.res, buildTier.cost, dayIndex);
-    if (!affordability.ok) {
-      setBuildError(affordability.reason || "Cannot build");
-      if (token) {
-        await syncResourcesFromServer().catch(() => null);
+    if (!serverPaid) {
+      const affordability = canAfford(resourceState.res, buildTier.cost, dayIndex);
+      if (!affordability.ok) {
+        setBuildError(affordability.reason || "Cannot build");
+        return;
       }
-      return;
+      setResourceState((prev) => ({
+        ...prev,
+        res: spend(prev.res, buildTier.cost, dayIndex)
+      }));
     }
     setBuildError("");
-    if (!(token && serverBuildingType)) {
-      setResourceState((prev) => {
-        const next = {
-          ...prev,
-          res: spend(prev.res, buildTier.cost, dayIndex)
-        };
-        return next;
-      });
-    }
     const job: BuildJob = {
       id: crypto.randomUUID(),
       cellId: selectedCellId,
@@ -1835,10 +1827,12 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
     if (!buildingEconomy) return;
     const tierEconomy = buildingEconomy.tiers[nextTier];
     const serverBuildingType = getServerBuildingType(selectedPlacement.buildingId);
+    let serverPaid = false;
     if (token && serverBuildingType) {
       try {
         const response = await buildOrUpgrade(token, serverBuildingType);
         applyServerResources(response.resources as ServerResourceLike);
+        serverPaid = true;
       } catch (error) {
         const message =
           error instanceof ApiRequestError
@@ -1849,24 +1843,18 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
         return;
       }
     }
-    const affordability = canAfford(resourceState.res, tierEconomy.cost, dayIndex);
-    if (!affordability.ok) {
-      setBuildError(affordability.reason || "Cannot upgrade");
-      if (token) {
-        await syncResourcesFromServer().catch(() => null);
+    if (!serverPaid) {
+      const affordability = canAfford(resourceState.res, tierEconomy.cost, dayIndex);
+      if (!affordability.ok) {
+        setBuildError(affordability.reason || "Cannot upgrade");
+        return;
       }
-      return;
+      setResourceState((prev) => ({
+        ...prev,
+        res: spend(prev.res, tierEconomy.cost, dayIndex)
+      }));
     }
     setBuildError("");
-    if (!(token && serverBuildingType)) {
-      setResourceState((prev) => {
-        const next = {
-          ...prev,
-          res: spend(prev.res, tierEconomy.cost, dayIndex)
-        };
-        return next;
-      });
-    }
     const job: BuildJob = {
       id: crypto.randomUUID(),
       cellId: selectedCellId,

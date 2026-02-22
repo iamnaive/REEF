@@ -53,9 +53,6 @@ const MAX_RECENT_PROJECTIONS_PER_WEATHER = 20;
 const BASE_BLOB_MAX_CHARS = 200_000;
 const BASE_BLOB_WRITE_COOLDOWN_MS = 2_000;
 const MAX_RESOURCES_OFFLINE_MS = 12 * 60 * 60 * 1000;
-const SHARD_MINE_CASH_PER_HOUR_BY_LEVEL = [80, 180, 320, 500];
-const PEARL_GROTTO_YIELD_PER_HOUR_BY_LEVEL = [35, 80, 150, 240];
-const TRAINING_REEF_ALPHA_PER_HOUR_BY_LEVEL = [20, 48, 90, 150];
 const PRESENCE_MAX_DELTA_MS = 5 * 60_000;
 const INITIAL_PLAYER_RESOURCES = {
   cash: 600,
@@ -67,40 +64,110 @@ const INITIAL_PLAYER_RESOURCES = {
 } as const;
 const baseBlobWriteGuard = new Map<string, number>();
 
+type NewBuildingId =
+  | "booster_forge"
+  | "cold_vault_insurance"
+  | "command_pit_egg_council_hq"
+  | "cult"
+  | "hype_farm"
+  | "memes_market"
+  | "narrative_radar"
+  | "openclaw_lab"
+  | "raid_dock_alpha_desk"
+  | "rehab_bay"
+  | "rug_salvage_yard"
+  | "whale_tap"
+  | "yield_router_station";
+
+const ALL_NEW_BUILDING_IDS: NewBuildingId[] = [
+  "booster_forge", "cold_vault_insurance", "command_pit_egg_council_hq",
+  "cult", "hype_farm", "memes_market", "narrative_radar", "openclaw_lab",
+  "raid_dock_alpha_desk", "rehab_bay", "rug_salvage_yard", "whale_tap",
+  "yield_router_station"
+];
+
+type ResourceCost = { cash?: number; yield?: number; alpha?: number; tickets?: number; mon?: number; faith?: number };
+
+function makeTierCosts(baseCash: number, monAtT4?: number): Record<number, ResourceCost> {
+  return {
+    1: { cash: baseCash },
+    2: { cash: Math.round(baseCash * 2.5), alpha: 10 },
+    3: { cash: Math.round(baseCash * 8), alpha: 30, yield: 120, tickets: 1 },
+    4: { cash: Math.round(baseCash * 25), alpha: 80, yield: 400, tickets: 2, ...(monAtT4 ? { mon: monAtT4 } : {}) }
+  };
+}
+
+const NEW_BUILDING_COSTS: Record<NewBuildingId, Record<number, ResourceCost>> = {
+  booster_forge: makeTierCosts(1200, 0.04),
+  cold_vault_insurance: makeTierCosts(1600, 0.08),
+  command_pit_egg_council_hq: makeTierCosts(300, 0.12),
+  cult: makeTierCosts(900, 0.03),
+  hype_farm: makeTierCosts(980, 0.04),
+  memes_market: makeTierCosts(450, 0.05),
+  narrative_radar: makeTierCosts(600, 0.05),
+  openclaw_lab: makeTierCosts(1300, 0.06),
+  raid_dock_alpha_desk: makeTierCosts(1400, 0.07),
+  rehab_bay: makeTierCosts(1080, 0.04),
+  rug_salvage_yard: makeTierCosts(300, 0.04),
+  whale_tap: makeTierCosts(1180, 0.06),
+  yield_router_station: makeTierCosts(500, 0.08)
+};
+
+type PassiveRateByTier = [number, number, number, number];
+const PASSIVE_CASH_PER_SEC: Partial<Record<NewBuildingId, PassiveRateByTier>> = {
+  rug_salvage_yard: [0.06, 0.12, 0.2, 0.3],
+  memes_market: [0.04, 0.09, 0.16, 0.24]
+};
+const PASSIVE_YIELD_PER_SEC: Partial<Record<NewBuildingId, PassiveRateByTier>> = {
+  yield_router_station: [0.04, 0.08, 0.13, 0.19]
+};
+const PASSIVE_ALPHA_PER_SEC: Partial<Record<NewBuildingId, PassiveRateByTier>> = {
+  narrative_radar: [0.03, 0.06, 0.1, 0.15]
+};
+
 type ActionConfig = {
   cooldownMs: number;
   chargeCap: number;
   regenMsPerCharge: number;
   dailyCap: number;
-  buildingType: BuildingType;
-  reward: Partial<Pick<AuthoritativeResources, "cash" | "yield" | "alpha">>;
+  buildingType: string;
+  reward: Partial<Pick<AuthoritativeResources, "cash" | "yield" | "alpha" | "faith" | "tickets">>;
+  cost?: ResourceCost;
+  tierScale: "linear25" | "flat";
 };
 
+function sec(s: number) { return s * 1000; }
+
 const ACTION_CONFIG: Record<string, ActionConfig> = {
-  "collect:shard_mine": {
-    cooldownMs: 60_000,
-    chargeCap: 6,
-    regenMsPerCharge: 30 * 60_000,
-    dailyCap: 0,
-    buildingType: "shard_mine",
-    reward: { cash: 120 }
-  },
-  "collect:pearl_grotto": {
-    cooldownMs: 120_000,
-    chargeCap: 4,
-    regenMsPerCharge: 60 * 60_000,
-    dailyCap: 0,
-    buildingType: "pearl_grotto",
-    reward: { yield: 80 }
-  },
-  "activate:training_reef": {
-    cooldownMs: 300_000,
-    chargeCap: 3,
-    regenMsPerCharge: 2 * 60 * 60_000,
-    dailyCap: 0,
-    buildingType: "training_reef",
-    reward: { alpha: 90 }
-  }
+  "booster_forge:ignite_booster":    { cooldownMs: sec(120), chargeCap: 4, regenMsPerCharge: 60*60_000, dailyCap: 0, buildingType: "booster_forge",       reward: {},                          cost: { cash: 520, alpha: 22 }, tierScale: "linear25" },
+  "booster_forge:overclock_line":    { cooldownMs: sec(95),  chargeCap: 4, regenMsPerCharge: 60*60_000, dailyCap: 0, buildingType: "booster_forge",       reward: { yield: 70 },               cost: {},                       tierScale: "linear25" },
+  "cold_vault_insurance:activate_coverage": { cooldownMs: sec(180), chargeCap: 3, regenMsPerCharge: 2*60*60_000, dailyCap: 0, buildingType: "cold_vault_insurance", reward: {}, cost: { tickets: 2, mon: 0.03 }, tierScale: "flat" },
+  "cold_vault_insurance:claim_payout": { cooldownMs: sec(140), chargeCap: 3, regenMsPerCharge: 2*60*60_000, dailyCap: 0, buildingType: "cold_vault_insurance", reward: { cash: 220 }, cost: { tickets: 1 }, tierScale: "linear25" },
+  "command_pit_egg_council_hq:issue_order":   { cooldownMs: sec(90),  chargeCap: 5, regenMsPerCharge: 45*60_000, dailyCap: 0, buildingType: "command_pit_egg_council_hq", reward: { alpha: 28 },  cost: {},               tierScale: "linear25" },
+  "command_pit_egg_council_hq:council_decree": { cooldownMs: sec(150), chargeCap: 5, regenMsPerCharge: 45*60_000, dailyCap: 0, buildingType: "command_pit_egg_council_hq", reward: { faith: 14, tickets: 0.35 }, cost: { cash: 120 }, tierScale: "linear25" },
+  "cult:ritual_conversion":          { cooldownMs: sec(75),  chargeCap: 5, regenMsPerCharge: 40*60_000, dailyCap: 0, buildingType: "cult",                reward: { faith: 26 },               cost: { alpha: 22 },            tierScale: "linear25" },
+  "cult:fervor_drive":               { cooldownMs: sec(110), chargeCap: 5, regenMsPerCharge: 40*60_000, dailyCap: 0, buildingType: "cult",                reward: { alpha: 30 },               cost: { faith: 14 },            tierScale: "linear25" },
+  "hype_farm:farm_hype":             { cooldownMs: sec(70),  chargeCap: 5, regenMsPerCharge: 40*60_000, dailyCap: 0, buildingType: "hype_farm",           reward: { alpha: 40, cash: 35 },     cost: { yield: 55 },            tierScale: "linear25" },
+  "hype_farm:viral_push":            { cooldownMs: sec(105), chargeCap: 5, regenMsPerCharge: 40*60_000, dailyCap: 0, buildingType: "hype_farm",           reward: { yield: 85 },               cost: { cash: 180 },            tierScale: "linear25" },
+  "memes_market:flip_memes":         { cooldownMs: sec(65),  chargeCap: 5, regenMsPerCharge: 35*60_000, dailyCap: 0, buildingType: "memes_market",        reward: { cash: 240 },               cost: { alpha: 25 },            tierScale: "linear25" },
+  "memes_market:liquidity_snipe":    { cooldownMs: sec(120), chargeCap: 5, regenMsPerCharge: 35*60_000, dailyCap: 0, buildingType: "memes_market",        reward: { cash: 180, alpha: 22 },    cost: { tickets: 1 },           tierScale: "linear25" },
+  "narrative_radar:scan_narrative":   { cooldownMs: sec(55),  chargeCap: 6, regenMsPerCharge: 30*60_000, dailyCap: 0, buildingType: "narrative_radar",     reward: { alpha: 45 },               cost: {},                       tierScale: "linear25" },
+  "narrative_radar:counter_signal":   { cooldownMs: sec(100), chargeCap: 6, regenMsPerCharge: 30*60_000, dailyCap: 0, buildingType: "narrative_radar",     reward: { cash: 320 },               cost: { alpha: 32 },            tierScale: "flat" },
+  "openclaw_lab:run_experiment":      { cooldownMs: sec(100), chargeCap: 4, regenMsPerCharge: 60*60_000, dailyCap: 0, buildingType: "openclaw_lab",        reward: {},                          cost: { alpha: 46 },            tierScale: "linear25" },
+  "openclaw_lab:synthesize_module":   { cooldownMs: sec(135), chargeCap: 4, regenMsPerCharge: 60*60_000, dailyCap: 0, buildingType: "openclaw_lab",        reward: { alpha: 32, faith: 8 },     cost: { yield: 45, cash: 160 }, tierScale: "linear25" },
+  "raid_dock_alpha_desk:launch_raid": { cooldownMs: sec(110), chargeCap: 4, regenMsPerCharge: 60*60_000, dailyCap: 0, buildingType: "raid_dock_alpha_desk", reward: {},                         cost: { tickets: 1 },           tierScale: "flat" },
+  "raid_dock_alpha_desk:intel_bribe": { cooldownMs: sec(85),  chargeCap: 4, regenMsPerCharge: 60*60_000, dailyCap: 0, buildingType: "raid_dock_alpha_desk", reward: { alpha: 28, tickets: 0.25 }, cost: { cash: 220 },          tierScale: "linear25" },
+  "rehab_bay:rehab_protocol":        { cooldownMs: sec(80),  chargeCap: 4, regenMsPerCharge: 50*60_000, dailyCap: 0, buildingType: "rehab_bay",           reward: {},                          cost: {},                       tierScale: "flat" },
+  "rehab_bay:recovery_boost":        { cooldownMs: sec(120), chargeCap: 4, regenMsPerCharge: 50*60_000, dailyCap: 0, buildingType: "rehab_bay",           reward: { alpha: 54, cash: 180 },    cost: { faith: 14 },            tierScale: "linear25" },
+  "rug_salvage_yard:salvage_sweep":   { cooldownMs: sec(60),  chargeCap: 6, regenMsPerCharge: 30*60_000, dailyCap: 0, buildingType: "rug_salvage_yard",    reward: { cash: 90 },                cost: {},                       tierScale: "linear25" },
+  "rug_salvage_yard:junk_refine":     { cooldownMs: sec(95),  chargeCap: 6, regenMsPerCharge: 30*60_000, dailyCap: 0, buildingType: "rug_salvage_yard",    reward: { cash: 190, alpha: 26 },    cost: { yield: 65 },            tierScale: "linear25" },
+  "whale_tap:tap_whale":              { cooldownMs: sec(150), chargeCap: 3, regenMsPerCharge: 2*60*60_000, dailyCap: 0, buildingType: "whale_tap",         reward: { cash: 220 },               cost: {},                       tierScale: "linear25" },
+  "whale_tap:premium_hook":           { cooldownMs: sec(180), chargeCap: 3, regenMsPerCharge: 2*60*60_000, dailyCap: 0, buildingType: "whale_tap",         reward: { cash: 180, tickets: 0.25 }, cost: { faith: 12 },           tierScale: "linear25" },
+  "yield_router_station:route_yield": { cooldownMs: sec(85),  chargeCap: 5, regenMsPerCharge: 40*60_000, dailyCap: 0, buildingType: "yield_router_station", reward: { yield: 55 },              cost: {},                       tierScale: "linear25" },
+  "yield_router_station:toggle_mode": { cooldownMs: sec(30),  chargeCap: 5, regenMsPerCharge: 40*60_000, dailyCap: 0, buildingType: "yield_router_station", reward: {},                         cost: {},                       tierScale: "flat" },
+  "collect:shard_mine": { cooldownMs: 60_000, chargeCap: 6, regenMsPerCharge: 30*60_000, dailyCap: 0, buildingType: "shard_mine", reward: { cash: 120 }, cost: {}, tierScale: "flat" },
+  "collect:pearl_grotto": { cooldownMs: 120_000, chargeCap: 4, regenMsPerCharge: 60*60_000, dailyCap: 0, buildingType: "pearl_grotto", reward: { yield: 80 }, cost: {}, tierScale: "flat" },
+  "activate:training_reef": { cooldownMs: 300_000, chargeCap: 3, regenMsPerCharge: 2*60*60_000, dailyCap: 0, buildingType: "training_reef", reward: { alpha: 90 }, cost: {}, tierScale: "flat" }
 };
 router.options("*", () => new Response(null, { headers: CORS_HEADERS }));
 
@@ -1007,24 +1074,52 @@ router.post("/api/base/build", async (request: Request, env: Env) => {
   if (!auth) return json({ error: "Unauthorized" }, 401);
 
   const body = await readBody(request);
-  const schema = z.object({
-    buildingType: z.string()
-  });
+  const schema = z.object({ buildingType: z.string() });
   const parsed = schema.safeParse(body);
   if (!parsed.success) return json({ error: "Invalid payload" }, 400);
-  const allowedTypes: BuildingType[] = ["shard_mine", "pearl_grotto", "training_reef", "storage_vault"];
-  if (!allowedTypes.includes(parsed.data.buildingType as BuildingType)) {
+
+  const buildingType = parsed.data.buildingType;
+  const isNewBuilding = ALL_NEW_BUILDING_IDS.includes(buildingType as NewBuildingId);
+  const isOldBuilding = (["shard_mine", "pearl_grotto", "training_reef", "storage_vault"] as string[]).includes(buildingType);
+
+  if (!isNewBuilding && !isOldBuilding) {
     const resources = await tickAuthoritativeResources(env, auth.address, Date.now());
     return json({ error: "UNSUPPORTED_BUILDING", resources }, 400);
   }
-  const buildingType = parsed.data.buildingType as BuildingType;
-  const def = BUILDINGS.find((b) => b.id === buildingType);
-  if (!def) return json({ error: "UNSUPPORTED_BUILDING" }, 400);
 
-  await ensureBaseTable(env);
   const nowMs = Date.now();
   const resourcesBefore = await tickAuthoritativeResources(env, auth.address, nowMs);
-  // Check if player already has this building
+
+  if (isNewBuilding) {
+    const tierCosts = NEW_BUILDING_COSTS[buildingType as NewBuildingId];
+    const blobTier = await getBlobBuildingTier(env, auth.address, buildingType);
+    const targetTier = blobTier + 1;
+    if (targetTier > 4) {
+      return json({ error: "Building already at max tier", resources: resourcesBefore }, 400);
+    }
+    const cost = tierCosts[targetTier];
+    if (!cost) return json({ error: "Invalid tier" }, 400);
+
+    const insufficientRes = checkAfford(resourcesBefore, cost);
+    if (insufficientRes) {
+      return json({ error: "INSUFFICIENT_FUNDS", detail: insufficientRes, resources: resourcesBefore }, 400);
+    }
+
+    const updatedAt = new Date(nowMs).toISOString();
+    const nextRes = deductCost(resourcesBefore, cost);
+    await env.DB.prepare(
+      "UPDATE player_resources SET cash = ?, yield = ?, alpha = ?, faith = ?, tickets = ?, mon = ?, updated_at = ? WHERE address = ?"
+    ).bind(nextRes.cash, nextRes.yield, nextRes.alpha, nextRes.faith, nextRes.tickets, nextRes.mon, updatedAt, auth.address).run();
+
+    const updatedResources = await getAuthoritativeResources(env, auth.address);
+    await logEvent(env, auth.address, "base_build", { buildingType, targetTier }, request);
+    return json({ resources: updatedResources });
+  }
+
+  await ensureBaseTable(env);
+  const oldDef = BUILDINGS.find((b) => b.id === buildingType);
+  if (!oldDef) return json({ error: "UNSUPPORTED_BUILDING" }, 400);
+
   const existing = await env.DB.prepare(
     "SELECT id, level FROM base_buildings WHERE address = ? AND building_type = ?"
   ).bind(auth.address, buildingType).first<{ id: string; level: number }>();
@@ -1033,60 +1128,39 @@ router.post("/api/base/build", async (request: Request, env: Env) => {
   let buildingId: string;
 
   if (existing) {
-    // Upgrade existing building
     targetLevel = existing.level + 1;
-    if (targetLevel > def.maxLevel) {
+    if (targetLevel > oldDef.maxLevel) {
       return json({ error: "Building already at max level" }, 400);
     }
     buildingId = existing.id;
   } else {
-    // Build new building
     targetLevel = 1;
     buildingId = nanoid(12);
-
-    // Check slot limit
     const base = await getBaseState(env, auth.address);
     if (base.buildings.length >= base.maxSlots) {
       return json({ error: "No available building slots" }, 400);
     }
   }
 
-  const cost = def.costs[targetLevel - 1];
+  const cost = oldDef.costs[targetLevel - 1];
   if (!cost) return json({ error: "Invalid level" }, 400);
   if (resourcesBefore.cash < cost.coins || resourcesBefore.yield < cost.pearls) {
-    return json(
-      {
-        error: "INSUFFICIENT_FUNDS",
-        resources: resourcesBefore
-      },
-      400
-    );
+    return json({ error: "INSUFFICIENT_FUNDS", resources: resourcesBefore }, 400);
   }
 
   const now = new Date().toISOString();
-
   const nextCash = Math.max(0, resourcesBefore.cash - cost.coins);
   const nextYield = Math.max(0, resourcesBefore.yield - cost.pearls);
 
   if (existing) {
-    // Upgrade: deduct resources and increase level
     await env.DB.batch([
-      env.DB.prepare(
-        "UPDATE base_buildings SET level = ? WHERE id = ?"
-      ).bind(targetLevel, buildingId),
-      env.DB.prepare(
-        "UPDATE player_resources SET cash = ?, yield = ?, updated_at = ? WHERE address = ?"
-      ).bind(nextCash, nextYield, now, auth.address)
+      env.DB.prepare("UPDATE base_buildings SET level = ? WHERE id = ?").bind(targetLevel, buildingId),
+      env.DB.prepare("UPDATE player_resources SET cash = ?, yield = ?, updated_at = ? WHERE address = ?").bind(nextCash, nextYield, now, auth.address)
     ]);
   } else {
-    // New build: insert building and deduct resources
     await env.DB.batch([
-      env.DB.prepare(
-        "INSERT INTO base_buildings (id, address, building_type, level, last_collected_at, created_at) VALUES (?, ?, ?, 1, ?, ?)"
-      ).bind(buildingId, auth.address, buildingType, now, now),
-      env.DB.prepare(
-        "UPDATE player_resources SET cash = ?, yield = ?, updated_at = ? WHERE address = ?"
-      ).bind(nextCash, nextYield, now, auth.address)
+      env.DB.prepare("INSERT INTO base_buildings (id, address, building_type, level, last_collected_at, created_at) VALUES (?, ?, ?, 1, ?, ?)").bind(buildingId, auth.address, buildingType, now, now),
+      env.DB.prepare("UPDATE player_resources SET cash = ?, yield = ?, updated_at = ? WHERE address = ?").bind(nextCash, nextYield, now, auth.address)
     ]);
   }
 
@@ -1222,36 +1296,58 @@ router.post("/api/action/perform", async (request: Request, env: Env) => {
     );
   }
 
-  await ensureBaseTable(env);
-  const building = await env.DB.prepare(
-    "SELECT level FROM base_buildings WHERE address = ? AND building_type = ?"
-  )
-    .bind(auth.address, config.buildingType)
-    .first<{ level: number }>();
-  if (!building) {
-    await saveActionState(env, auth.address, actionKey, readyState);
-    return json({ ok: false, code: "UNSUPPORTED_ACTION", resources, serverNowMs: nowMs }, 400);
+  let level = 1;
+  const isNewBld = ALL_NEW_BUILDING_IDS.includes(config.buildingType as NewBuildingId);
+  if (isNewBld) {
+    level = Math.max(1, Math.min(4, await getBlobBuildingTier(env, auth.address, config.buildingType)));
+    if (level === 0) {
+      await saveActionState(env, auth.address, actionKey, readyState);
+      return json({ ok: false, code: "BUILDING_NOT_FOUND", resources, serverNowMs: nowMs }, 400);
+    }
+  } else {
+    await ensureBaseTable(env);
+    const building = await env.DB.prepare(
+      "SELECT level FROM base_buildings WHERE address = ? AND building_type = ?"
+    ).bind(auth.address, config.buildingType).first<{ level: number }>();
+    if (!building) {
+      await saveActionState(env, auth.address, actionKey, readyState);
+      return json({ ok: false, code: "UNSUPPORTED_ACTION", resources, serverNowMs: nowMs }, 400);
+    }
+    level = Math.max(1, Math.min(4, building.level || 1));
   }
 
-  const level = Math.max(1, Math.min(4, building.level || 1));
+  const tierMul = config.tierScale === "linear25" ? (1 + (level - 1) * 0.25) : 1;
   const nextState = consumeUseActionState(readyState, nowMs, config.chargeCap);
-  const rewardCash = (config.reward.cash ?? 0) * level;
-  const rewardYield = (config.reward.yield ?? 0) * level;
-  const rewardAlpha = (config.reward.alpha ?? 0) * level;
+
+  const actionCost = config.cost ?? {};
+  const costInsufficient = checkAfford(resources, actionCost);
+  if (costInsufficient) {
+    await saveActionState(env, auth.address, actionKey, readyState);
+    return json({ ok: false, code: "INSUFFICIENT_FUNDS", detail: costInsufficient, resources, serverNowMs: nowMs }, 400);
+  }
+
+  const rewardCash = (config.reward.cash ?? 0) * tierMul;
+  const rewardYield = (config.reward.yield ?? 0) * tierMul;
+  const rewardAlpha = (config.reward.alpha ?? 0) * tierMul;
+  const rewardFaith = (config.reward.faith ?? 0) * tierMul;
+  const rewardTickets = (config.reward.tickets ?? 0) * tierMul;
 
   const updatedAt = new Date(nowMs).toISOString();
   const nextResources = {
     ...resources,
-    cash: resources.cash + rewardCash,
-    yield: resources.yield + rewardYield,
-    alpha: resources.alpha + rewardAlpha,
+    cash: Math.max(0, resources.cash - (actionCost.cash ?? 0) + rewardCash),
+    yield: Math.max(0, resources.yield - (actionCost.yield ?? 0) + rewardYield),
+    alpha: Math.max(0, resources.alpha - (actionCost.alpha ?? 0) + rewardAlpha),
+    faith: Math.max(0, resources.faith - (actionCost.faith ?? 0) + rewardFaith),
+    tickets: Math.max(0, resources.tickets - (actionCost.tickets ?? 0) + rewardTickets),
+    mon: Math.max(0, resources.mon - (actionCost.mon ?? 0)),
     updatedAt
   };
 
   await env.DB.batch([
     env.DB.prepare(
-      "UPDATE player_resources SET cash = ?, yield = ?, alpha = ?, updated_at = ? WHERE address = ?"
-    ).bind(nextResources.cash, nextResources.yield, nextResources.alpha, updatedAt, auth.address),
+      "UPDATE player_resources SET cash = ?, yield = ?, alpha = ?, faith = ?, tickets = ?, mon = ?, updated_at = ? WHERE address = ?"
+    ).bind(nextResources.cash, nextResources.yield, nextResources.alpha, nextResources.faith, nextResources.tickets, nextResources.mon, updatedAt, auth.address),
     env.DB.prepare(
       "INSERT INTO player_action_state (address, action_key, charges, last_action_ms, last_regen_ms, daily_count, daily_reset_ymd, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(address, action_key) DO UPDATE SET charges = excluded.charges, last_action_ms = excluded.last_action_ms, last_regen_ms = excluded.last_regen_ms, daily_count = excluded.daily_count, daily_reset_ymd = excluded.daily_reset_ymd, updated_at = excluded.updated_at"
     ).bind(
@@ -1888,20 +1984,39 @@ async function getAuthoritativeResources(env: Env, address: string): Promise<Aut
   };
 }
 
-function getPassiveHourlyRatesForBase(buildings: Array<{ building_type: string; level: number }>) {
+function getPassiveRatesFromBlob(placements: Record<string, { buildingId: string; tier: number } | null>): { cashPerSec: number; yieldPerSec: number; alphaPerSec: number } {
+  let cashPerSec = 0;
+  let yieldPerSec = 0;
+  let alphaPerSec = 0;
+
+  Object.values(placements).forEach((p) => {
+    if (!p) return;
+    const tierIdx = Math.max(0, Math.min(3, (p.tier || 1) - 1));
+    const bid = p.buildingId as NewBuildingId;
+    const cashRates = PASSIVE_CASH_PER_SEC[bid];
+    if (cashRates) cashPerSec += cashRates[tierIdx];
+    const yieldRates = PASSIVE_YIELD_PER_SEC[bid];
+    if (yieldRates) yieldPerSec += yieldRates[tierIdx];
+    const alphaRates = PASSIVE_ALPHA_PER_SEC[bid];
+    if (alphaRates) alphaPerSec += alphaRates[tierIdx];
+  });
+
+  return { cashPerSec, yieldPerSec, alphaPerSec };
+}
+
+function getPassiveHourlyRatesForOldBase(buildings: Array<{ building_type: string; level: number }>) {
+  const SHARD_MINE_CASH_PER_HOUR = [80, 180, 320, 500];
+  const PEARL_GROTTO_YIELD_PER_HOUR = [35, 80, 150, 240];
+  const TRAINING_REEF_ALPHA_PER_HOUR = [20, 48, 90, 150];
   let cashPerHour = 0;
   let yieldPerHour = 0;
   let alphaPerHour = 0;
 
   buildings.forEach((building) => {
     const levelIndex = Math.max(0, Math.min(3, (building.level || 1) - 1));
-    if (building.building_type === "shard_mine") {
-      cashPerHour += SHARD_MINE_CASH_PER_HOUR_BY_LEVEL[levelIndex] ?? 0;
-    } else if (building.building_type === "pearl_grotto") {
-      yieldPerHour += PEARL_GROTTO_YIELD_PER_HOUR_BY_LEVEL[levelIndex] ?? 0;
-    } else if (building.building_type === "training_reef") {
-      alphaPerHour += TRAINING_REEF_ALPHA_PER_HOUR_BY_LEVEL[levelIndex] ?? 0;
-    }
+    if (building.building_type === "shard_mine") cashPerHour += SHARD_MINE_CASH_PER_HOUR[levelIndex] ?? 0;
+    else if (building.building_type === "pearl_grotto") yieldPerHour += PEARL_GROTTO_YIELD_PER_HOUR[levelIndex] ?? 0;
+    else if (building.building_type === "training_reef") alphaPerHour += TRAINING_REEF_ALPHA_PER_HOUR[levelIndex] ?? 0;
   });
 
   return { cashPerHour, yieldPerHour, alphaPerHour };
@@ -1916,29 +2031,39 @@ async function tickAuthoritativeResources(
   const current = await getAuthoritativeResources(env, address);
   const dtMsRaw = Math.max(0, nowMs - current.lastTickMs);
   const dtMs = Math.min(MAX_RESOURCES_OFFLINE_MS, dtMsRaw);
-  const dtHours = dtMs / 3_600_000;
-  if (dtHours <= 0) {
+  const dtSec = dtMs / 1000;
+  if (dtSec <= 0) {
     return current;
   }
 
-  await ensureBaseTable(env);
-  const buildings = await env.DB.prepare(
-    "SELECT building_type, level FROM base_buildings WHERE address = ?"
-  )
-    .bind(address)
-    .all<{ building_type: string; level: number }>();
+  const blobRates = await getBlobPassiveRates(env, address);
 
-  const rates = getPassiveHourlyRatesForBase(buildings.results ?? []);
-  const nextCash = current.cash + Math.floor(rates.cashPerHour * dtHours);
-  const nextYield = current.yield + Math.floor(rates.yieldPerHour * dtHours);
-  const nextAlpha = current.alpha + Math.floor(rates.alphaPerHour * dtHours);
+  let oldCashPerSec = 0;
+  let oldYieldPerSec = 0;
+  let oldAlphaPerSec = 0;
+  try {
+    await ensureBaseTable(env);
+    const buildings = await env.DB.prepare(
+      "SELECT building_type, level FROM base_buildings WHERE address = ?"
+    ).bind(address).all<{ building_type: string; level: number }>();
+    const oldRates = getPassiveHourlyRatesForOldBase(buildings.results ?? []);
+    oldCashPerSec = oldRates.cashPerHour / 3600;
+    oldYieldPerSec = oldRates.yieldPerHour / 3600;
+    oldAlphaPerSec = oldRates.alphaPerHour / 3600;
+  } catch { /* old table may not exist yet */ }
+
+  const totalCashPerSec = blobRates.cashPerSec + oldCashPerSec;
+  const totalYieldPerSec = blobRates.yieldPerSec + oldYieldPerSec;
+  const totalAlphaPerSec = blobRates.alphaPerSec + oldAlphaPerSec;
+
+  const nextCash = current.cash + totalCashPerSec * dtSec;
+  const nextYield = current.yield + totalYieldPerSec * dtSec;
+  const nextAlpha = current.alpha + totalAlphaPerSec * dtSec;
   const updatedAt = new Date(nowMs).toISOString();
 
   await env.DB.prepare(
     "UPDATE player_resources SET cash = ?, yield = ?, alpha = ?, last_tick_ms = ?, updated_at = ? WHERE address = ?"
-  )
-    .bind(nextCash, nextYield, nextAlpha, nowMs, updatedAt, address)
-    .run();
+  ).bind(nextCash, nextYield, nextAlpha, nowMs, updatedAt, address).run();
 
   return {
     ...current,
@@ -2519,6 +2644,58 @@ function formatWeiToMon(wei: bigint): string {
   const fractionPadded = fraction.toString().padStart(18, "0");
   const fractionShort = fractionPadded.slice(0, 4).replace(/0+$/, "");
   return fractionShort ? `${whole.toString()}.${fractionShort}` : whole.toString();
+}
+
+/* ── Blob-based building helpers ── */
+
+async function readBlobPlacements(env: Env, address: string): Promise<Record<string, { buildingId: string; tier: number } | null>> {
+  try {
+    await ensureBaseStateBlobTable(env);
+    const row = await env.DB.prepare(
+      "SELECT state_json FROM base_state_blobs WHERE address = ?"
+    ).bind(address).first<{ state_json: string }>();
+    if (!row) return {};
+    const parsed = JSON.parse(row.state_json);
+    if (parsed && typeof parsed === "object" && parsed.placements && typeof parsed.placements === "object") {
+      return parsed.placements as Record<string, { buildingId: string; tier: number } | null>;
+    }
+  } catch { /* blob not available */ }
+  return {};
+}
+
+async function getBlobPassiveRates(env: Env, address: string) {
+  const placements = await readBlobPlacements(env, address);
+  return getPassiveRatesFromBlob(placements);
+}
+
+async function getBlobBuildingTier(env: Env, address: string, buildingType: string): Promise<number> {
+  const placements = await readBlobPlacements(env, address);
+  for (const p of Object.values(placements)) {
+    if (p && p.buildingId === buildingType) return Math.max(1, Math.min(4, p.tier || 1));
+  }
+  return 0;
+}
+
+function checkAfford(resources: AuthoritativeResources, cost: ResourceCost): string | null {
+  if ((cost.cash ?? 0) > resources.cash) return "Not enough Cash";
+  if ((cost.yield ?? 0) > resources.yield) return "Not enough Yield";
+  if ((cost.alpha ?? 0) > resources.alpha) return "Not enough Alpha";
+  if ((cost.tickets ?? 0) > resources.tickets) return "Not enough Tickets";
+  if ((cost.mon ?? 0) > resources.mon) return "Not enough MON";
+  if ((cost.faith ?? 0) > resources.faith) return "Not enough Faith";
+  return null;
+}
+
+function deductCost(resources: AuthoritativeResources, cost: ResourceCost): AuthoritativeResources {
+  return {
+    ...resources,
+    cash: Math.max(0, resources.cash - (cost.cash ?? 0)),
+    yield: Math.max(0, resources.yield - (cost.yield ?? 0)),
+    alpha: Math.max(0, resources.alpha - (cost.alpha ?? 0)),
+    faith: Math.max(0, resources.faith - (cost.faith ?? 0)),
+    tickets: Math.max(0, resources.tickets - (cost.tickets ?? 0)),
+    mon: Math.max(0, resources.mon - (cost.mon ?? 0))
+  };
 }
 
 async function logEvent(

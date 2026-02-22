@@ -231,7 +231,7 @@ export async function fetchBase(token: string) {
   return (await res.json()) as BaseState;
 }
 
-export async function buildOrUpgrade(token: string, buildingType: BuildingType) {
+export async function buildOrUpgrade(token: string, buildingType: string) {
   const res = await fetch(`${API_BASE}/api/base/build`, {
     method: "POST",
     headers: getHeaders(token),
@@ -239,9 +239,9 @@ export async function buildOrUpgrade(token: string, buildingType: BuildingType) 
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Build failed" }));
-    throw new Error((err as { error?: string }).error || "Build failed");
+    throw new ApiRequestError((err as { error?: string }).error || "Build failed", res.status, err);
   }
-  return (await res.json()) as { base: BaseState; resources: ResourceTotals };
+  return (await res.json()) as { base?: BaseState; resources: ResourceTotals & BaseAuthoritativeResources };
 }
 
 export async function collectBaseResources(token: string) {

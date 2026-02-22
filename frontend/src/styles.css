@@ -4845,8 +4845,12 @@ body.base-screen-no-scroll {
   }
 }
 
-/* Final mobile portrait pass for menu + base UI. */
+/* ═══════════════════════════════════════════
+   Mobile portrait — compact, touch-friendly
+   ═══════════════════════════════════════════ */
 @media (max-width: 820px) and (orientation: portrait) {
+
+  /* ── Menu screen ── */
   .app.show-menu-bg .menu-bg {
     background-size: 132% 100%;
     background-position: center center;
@@ -4863,119 +4867,439 @@ body.base-screen-no-scroll {
     height: clamp(96px, 22vw, 180px);
   }
 
+  /* ── Top HUD — single compact strip ── */
   .bs-top-hud {
-    top: max(6px, env(safe-area-inset-top));
-    left: 6px;
-    right: 6px;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 6px;
-    padding: 6px 8px;
+    top: max(4px, env(safe-area-inset-top));
+    left: 4px;
+    right: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    padding: 5px 6px;
     border-radius: 10px;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, rgba(20, 82, 108, 0.82), rgba(14, 62, 86, 0.88));
+    border-color: rgba(130, 210, 240, 0.35);
   }
 
-  .hud-pills,
-  .bs-threatbars,
-  .hud-actions {
-    width: 100%;
+  /* Resources row — icon-tight, single horizontal line */
+  .hud-pills {
+    display: flex;
+    gap: 2px;
+    flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    order: 1;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .hud-pills::-webkit-scrollbar { display: none; }
+
+  .hud-pill.hud-pill--resource {
+    gap: 2px;
+    padding: 2px 4px;
   }
 
-  .hud-pills::-webkit-scrollbar,
-  .bs-threatbars::-webkit-scrollbar,
-  .hud-actions::-webkit-scrollbar {
-    display: none;
+  .bs-res-ico {
+    width: 18px;
+    height: 18px;
   }
 
-  .hud-actions {
-    gap: 6px;
-    justify-content: flex-start;
-    padding-bottom: 2px;
+  .bs-res-label {
+    display: none !important;
   }
 
-  .hud-btn {
-    min-height: 40px;
-    padding: 7px 10px;
-    font-size: 11px;
+  .bs-res-value {
+    font-size: 11px !important;
+    font-weight: 800;
+    line-height: 1;
+    margin-top: 0 !important;
   }
 
-  .bs-threatbar {
-    min-width: 106px;
-    padding: 3px 5px;
+  .hud-pill {
+    min-width: unset;
+    padding: 2px 5px;
+    border-radius: 8px;
+    font-size: 10px;
   }
 
-  .bs-threatbar-top {
+  .hud-pill-label {
+    font-size: 8px;
+  }
+
+  .hud-pill-value {
+    font-size: 10px;
+    margin-top: 0;
+  }
+
+  /* Charges badge — compact inline */
+  .bs-charges {
+    padding: 3px 6px;
+    border-radius: 7px;
+    order: 2;
+    flex: 0 0 auto;
+  }
+
+  .bs-charges-main {
     font-size: 9px;
   }
 
+  .bs-charges-next {
+    font-size: 8px;
+  }
+
+  /* Nav buttons — small row, right-aligned */
+  .hud-actions {
+    display: flex;
+    gap: 4px;
+    order: 3;
+    flex: 0 0 auto;
+  }
+
+  .hud-btn {
+    min-height: 32px;
+    min-width: 32px;
+    padding: 5px 8px;
+    font-size: 10px;
+    border-radius: 8px;
+  }
+
+  /* Threat bars — collapsed into thin row below resources */
+  .bs-threatbars {
+    width: 100%;
+    display: flex;
+    gap: 4px;
+    order: 4;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .bs-threatbars::-webkit-scrollbar { display: none; }
+
+  .bs-threatbar {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 2px 4px;
+    border-radius: 6px;
+    border-width: 1px;
+  }
+
+  .bs-threatbar-top {
+    font-size: 8px;
+    gap: 3px;
+  }
+
+  .bs-threatbar-track {
+    margin-top: 2px;
+    height: 3px;
+    border-width: 1px;
+  }
+
+  /* Hide inactive threats to save space */
+  .bs-threatbar:not(.active) {
+    display: none;
+  }
+
+  /* ── Build sidebar → bottom sheet ── */
   .base-sidebar {
+    position: fixed;
     top: auto;
-    left: 8px;
-    right: 8px;
-    bottom: calc(126px + env(safe-area-inset-bottom));
-    width: auto;
-    max-height: min(46vh, 420px);
-    padding: 8px;
-    border-width: 2px;
-    border-radius: 14px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: min(58vh, 480px);
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+    border-width: 2px 2px 0 2px;
     z-index: 58;
+    background: linear-gradient(180deg, rgba(22, 88, 118, 0.94), rgba(12, 58, 82, 0.96));
+    backdrop-filter: blur(14px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+  }
+
+  .base-build-title {
+    font-size: 15px;
+    font-weight: 800;
+    margin-bottom: 2px;
   }
 
   .base-sidebar-list {
-    max-height: min(22vh, 220px);
+    max-height: min(26vh, 260px);
     gap: 6px;
+    padding-right: 2px;
   }
 
   .base-sidebar-item {
-    padding: 6px;
-    gap: 7px;
+    padding: 8px;
+    gap: 8px;
+    border-radius: 12px;
   }
 
   .base-sidebar-item img {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
   }
 
   .base-sidebar-item-name {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .base-sidebar-item-cost {
     font-size: 11px;
   }
 
-  .base-build-cost,
-  .base-action-meta,
+  .base-build-cost {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .base-action-meta {
+    font-size: 11px;
+  }
+
   .base-action-cost {
     font-size: 10px;
   }
 
   .base-action-row {
-    padding: 6px;
+    padding: 8px;
     gap: 5px;
+    border-radius: 10px;
+    border-width: 1.5px;
   }
 
+  .base-actions-list {
+    gap: 6px;
+  }
+
+  /* Action chips — tighter */
+  .rr-chip {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-width: 1.5px;
+  }
+
+  .rr-chip-row {
+    gap: 4px;
+  }
+
+  /* Build/Upgrade/Claim buttons — large tap targets */
+  .base-build-action {
+    min-height: 44px;
+    font-size: 14px;
+    font-weight: 800;
+    border-radius: 12px;
+    padding: 10px 14px;
+  }
+
+  .base-sidebar-build-btn {
+    font-size: 15px;
+  }
+
+  .base-sidebar-actions {
+    padding-top: 6px;
+  }
+
+  /* ── Build FAB — larger, bottom-right ── */
+  .build-fab {
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    width: 56px;
+    height: 56px;
+    font-size: 12px;
+    z-index: 55;
+  }
+
+  .base-fab-hint {
+    right: 14px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    font-size: 10px;
+  }
+
+  /* ── Queue card — bottom-left compact ── */
   .base-queue-card {
-    left: 8px;
+    left: 6px;
     right: auto;
-    width: min(42vw, 180px);
-    max-width: min(42vw, 180px);
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    max-height: 128px;
+    bottom: calc(6px + env(safe-area-inset-bottom));
+    width: min(44vw, 185px);
+    max-width: min(44vw, 185px);
+    max-height: 110px;
     overflow: auto;
-    padding: 8px;
+    padding: 7px;
     border-width: 2px;
+    border-radius: 12px;
     z-index: 57;
   }
 
+  /* ── Action dock — next to queue card ── */
   .base-action-dock {
-    left: calc(8px + min(42vw, 180px) + 8px);
-    right: 8px;
+    left: calc(6px + min(44vw, 185px) + 6px);
+    right: 70px;
     width: auto;
     max-width: none;
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    max-height: 128px;
-    padding: 8px;
+    bottom: calc(6px + env(safe-area-inset-bottom));
+    max-height: 110px;
+    padding: 7px;
+    border-radius: 12px;
     z-index: 56;
     transform: none;
+  }
+
+  /* ── Context panel (build picker grid) ── */
+  .bs-context-panel {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 55vh;
+  }
+
+  .bs-context-content {
+    max-height: min(44vh, 380px);
+  }
+
+  .bs-build-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .bs-build-card {
+    padding: 6px;
+    border-radius: 8px;
+  }
+
+  .bs-build-card img {
+    height: 52px;
+  }
+
+  .bs-build-name {
+    font-size: 11px;
+  }
+
+  .bs-build-cost {
+    font-size: 10px;
+  }
+
+  /* ── Toast notification — above bottom sheet ── */
+  .bs-toast {
+    bottom: calc(68px + env(safe-area-inset-bottom));
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* ── Map toast (threat posts) — smaller on mobile ── */
+  .map-toast {
+    padding: 3px 6px;
+    gap: 4px;
+    border-radius: 8px;
+    border-width: 1.5px;
+  }
+
+  .map-toast-avatar {
+    width: 16px;
+    height: 16px;
+    font-size: 8px;
+    border-width: 1.5px;
+  }
+
+  .map-toast.kol .map-toast-avatar {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+
+  .map-toast-text {
+    font-size: 9px;
+  }
+
+  /* ── Building icons on map — slightly smaller ── */
+  .bs-building-icon-img {
+    width: 90px;
+    height: 90px;
+  }
+
+  .bs-building-timer {
+    font-size: 11px;
+  }
+
+  /* ── Bottom sheet grab handle ── */
+  .base-sidebar::before {
+    content: "";
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(180, 230, 255, 0.35);
+    margin: 0 auto 8px;
+    flex-shrink: 0;
+  }
+
+  /* ── Floating cash hits — smaller on mobile ── */
+  .floating-cash-hit {
+    font-size: 12px;
+  }
+
+  /* ── Swarm finish overlay — fit mobile ── */
+  .swarm-finish-overlay .swarm-finish-card {
+    width: calc(100vw - 32px);
+    max-width: 360px;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   Small landscape phones (game on phone sideways)
+   ═══════════════════════════════════════════ */
+@media (max-height: 500px) and (orientation: landscape) {
+  .bs-top-hud {
+    top: 2px;
+    left: 4px;
+    right: 4px;
+    padding: 3px 6px;
+    gap: 4px;
+  }
+
+  .bs-res-ico {
+    width: 16px;
+    height: 16px;
+  }
+
+  .bs-res-value {
+    font-size: 10px !important;
+  }
+
+  .bs-res-label {
+    display: none !important;
+  }
+
+  .hud-pill {
+    padding: 2px 4px;
+  }
+
+  .hud-btn {
+    min-height: 28px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .bs-threatbars {
+    display: none;
+  }
+
+  .base-sidebar {
+    max-height: calc(100vh - 60px);
+  }
+
+  .build-fab {
+    width: 46px;
+    height: 46px;
+    font-size: 11px;
   }
 }
