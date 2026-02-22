@@ -5416,14 +5416,12 @@ body.base-screen-no-scroll {
     font-size: 15px;
   }
 
-  /* ── Details mode scrollable area ── */
+  /* ── Details mode — actions take natural height, sidebar scrolls ── */
   .base-actions-list {
     gap: 6px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    flex: 1 1 0;
-    min-height: 0;
+    flex-shrink: 0;
     padding-bottom: 4px;
+    overflow: visible;
   }
 
   .base-build-cost {
