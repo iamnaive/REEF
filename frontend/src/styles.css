@@ -4867,45 +4867,44 @@ body.base-screen-no-scroll {
     height: clamp(96px, 22vw, 180px);
   }
 
-  /* ── Top HUD — single compact strip ── */
+  /* ── Top HUD — single scrollable strip ── */
   .bs-top-hud {
     top: max(4px, env(safe-area-inset-top));
     left: 4px;
     right: 4px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px 6px;
-    padding: 5px 6px;
+    flex-wrap: nowrap;
+    gap: 0;
+    padding: 5px 0 5px 6px;
     border-radius: 10px;
     align-items: center;
-    justify-content: center;
-    background: linear-gradient(180deg, rgba(20, 82, 108, 0.82), rgba(14, 62, 86, 0.88));
-    border-color: rgba(130, 210, 240, 0.35);
-  }
-
-  /* Resources row — icon-tight, single horizontal line */
-  .hud-pills {
-    display: flex;
-    gap: 2px;
-    flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    order: 1;
-    flex: 1 1 0;
-    min-width: 0;
+    background: linear-gradient(180deg, rgba(20, 82, 108, 0.82), rgba(14, 62, 86, 0.88));
+    border-color: rgba(130, 210, 240, 0.35);
   }
-  .hud-pills::-webkit-scrollbar { display: none; }
+  .bs-top-hud::-webkit-scrollbar { display: none; }
+
+  /* Resources — inline, no wrapping, no shrinking */
+  .hud-pills {
+    display: flex;
+    gap: 3px;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    overflow: visible;
+  }
 
   .hud-pill.hud-pill--resource {
     gap: 2px;
     padding: 2px 4px;
+    flex-shrink: 0;
   }
 
   .bs-res-ico {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
   }
 
   .bs-res-label {
@@ -4913,7 +4912,7 @@ body.base-screen-no-scroll {
   }
 
   .bs-res-value {
-    font-size: 11px !important;
+    font-size: 12px !important;
     font-weight: 800;
     line-height: 1;
     margin-top: 0 !important;
@@ -4921,9 +4920,10 @@ body.base-screen-no-scroll {
 
   .hud-pill {
     min-width: unset;
-    padding: 2px 5px;
+    padding: 3px 6px;
     border-radius: 8px;
     font-size: 10px;
+    flex-shrink: 0;
   }
 
   .hud-pill-label {
@@ -4931,16 +4931,16 @@ body.base-screen-no-scroll {
   }
 
   .hud-pill-value {
-    font-size: 10px;
+    font-size: 11px;
     margin-top: 0;
   }
 
-  /* Charges badge — compact inline */
+  /* Charges badge — inline after pills, scroll to see */
   .bs-charges {
-    padding: 3px 6px;
+    padding: 4px 7px;
     border-radius: 7px;
-    order: 2;
-    flex: 0 0 auto;
+    flex-shrink: 0;
+    margin-left: 4px;
   }
 
   .bs-charges-main {
@@ -4951,32 +4951,32 @@ body.base-screen-no-scroll {
     font-size: 8px;
   }
 
-  /* Nav buttons — small row, right-aligned */
+  /* Nav buttons — after charges, scroll to reach */
   .hud-actions {
     display: flex;
     gap: 4px;
-    order: 3;
-    flex: 0 0 auto;
+    flex-shrink: 0;
+    margin-left: 4px;
+    padding-right: 6px;
   }
 
   .hud-btn {
-    min-height: 32px;
-    min-width: 32px;
-    padding: 5px 8px;
-    font-size: 10px;
+    min-height: 34px;
+    min-width: 34px;
+    padding: 6px 10px;
+    font-size: 11px;
     border-radius: 8px;
+    flex-shrink: 0;
   }
 
-  /* Threat bars — collapsed into thin row below resources */
+  /* Threat bars — hidden from HUD strip, only show active inline */
   .bs-threatbars {
-    width: 100%;
     display: flex;
     gap: 4px;
-    order: 4;
-    overflow-x: auto;
-    scrollbar-width: none;
+    flex-shrink: 0;
+    margin-left: 4px;
+    overflow: visible;
   }
-  .bs-threatbars::-webkit-scrollbar { display: none; }
 
   .bs-threatbar {
     min-width: 0;
