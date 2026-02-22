@@ -5256,7 +5256,7 @@ body.base-screen-no-scroll {
     right: 0;
     bottom: 0;
     width: 100%;
-    max-height: min(68vh, 520px);
+    max-height: min(72vh, 540px);
     padding: 6px 10px 0;
     border-radius: 18px 18px 0 0;
     border-width: 2px 2px 0 2px;
@@ -5264,11 +5264,15 @@ body.base-screen-no-scroll {
     gap: 0;
     background: linear-gradient(180deg, rgba(22, 88, 118, 0.96), rgba(12, 58, 82, 0.98));
     backdrop-filter: blur(14px);
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     touch-action: pan-y;
     display: flex;
     flex-direction: column;
+    scrollbar-width: none;
   }
+  .base-sidebar::-webkit-scrollbar { display: none; }
 
   /* ── Header row ── */
   .base-build-header-row {
@@ -5373,8 +5377,9 @@ body.base-screen-no-scroll {
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(130, 210, 240, 0.15);
-    flex-shrink: 0;
+    flex-shrink: 1;
     margin-bottom: 4px;
+    overflow: hidden;
   }
 
   .base-build-selected-name {
@@ -5390,9 +5395,12 @@ body.base-screen-no-scroll {
 
   /* ── Build button — pinned at bottom ── */
   .base-sidebar-actions {
+    position: sticky;
+    bottom: 0;
     flex-shrink: 0;
-    padding: 8px 0 calc(10px + env(safe-area-inset-bottom));
-    background: linear-gradient(180deg, rgba(12, 58, 82, 0.0) 0%, rgba(12, 58, 82, 0.96) 30%);
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
+    margin: 0 -10px;
+    background: linear-gradient(180deg, rgba(12, 58, 82, 0.0) 0%, rgba(12, 58, 82, 0.98) 25%);
     z-index: 2;
   }
 
