@@ -1251,6 +1251,73 @@ router.post("/api/base/state", async (request: Request, env: Env) => {
   return json({ ok: true, updatedAt });
 });
 
+router.get("/api/action/states", async (request: Request, env: Env) => {
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ ok: false, code: "UNAUTHORIZED" }, 401);
+  await ensurePlayerActionStateTable(env);
+  const rows = await env.DB.prepare(
+    "SELECT action_key, charges, last_action_ms, last_regen_ms, daily_count, daily_reset_ymd FROM player_action_state WHERE address = ?"
+  ).bind(auth.address).all<{
+    action_key: string;
+    charges: number;
+    last_action_ms: number;
+    last_regen_ms: number;
+    daily_count: number;
+    daily_reset_ymd: string;
+  }>();
+
+  const nowMs = Date.now();
+  const nowYmd = getUtcYmd(nowMs);
+  const states: Record<string, {
+    charges: number;
+    chargeCap: number;
+    cooldownMs: number;
+    regenMsPerCharge: number;
+    lastActionMs: number;
+    dailyCount: number;
+    dailyCap: number;
+  }> = {};
+
+  for (const row of rows.results) {
+    const config = ACTION_CONFIG[row.action_key];
+    if (!config) continue;
+    let state: PlayerActionStateRow = {
+      charges: row.charges,
+      lastActionMs: row.last_action_ms,
+      lastRegenMs: row.last_regen_ms,
+      dailyCount: row.daily_count,
+      dailyResetYmd: row.daily_reset_ymd
+    };
+    state = applyDailyResetActionState(state, nowYmd);
+    state = regenChargesActionState(state, nowMs, config.regenMsPerCharge, config.chargeCap);
+    states[row.action_key] = {
+      charges: state.charges,
+      chargeCap: config.chargeCap,
+      cooldownMs: config.cooldownMs,
+      regenMsPerCharge: config.regenMsPerCharge,
+      lastActionMs: state.lastActionMs,
+      dailyCount: state.dailyCount,
+      dailyCap: config.dailyCap
+    };
+  }
+
+  for (const [key, config] of Object.entries(ACTION_CONFIG)) {
+    if (!states[key]) {
+      states[key] = {
+        charges: config.chargeCap,
+        chargeCap: config.chargeCap,
+        cooldownMs: config.cooldownMs,
+        regenMsPerCharge: config.regenMsPerCharge,
+        lastActionMs: 0,
+        dailyCount: 0,
+        dailyCap: config.dailyCap
+      };
+    }
+  }
+
+  return json({ ok: true, states, serverNowMs: nowMs });
+});
+
 router.post("/api/action/perform", async (request: Request, env: Env) => {
   const auth = await requireAuth(request, env);
   if (!auth) return json({ ok: false, code: "UNAUTHORIZED" }, 401);

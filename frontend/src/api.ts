@@ -305,6 +305,31 @@ export async function getResources(token: string) {
   };
 }
 
+export interface ServerActionState {
+  charges: number;
+  chargeCap: number;
+  cooldownMs: number;
+  regenMsPerCharge: number;
+  lastActionMs: number;
+  dailyCount: number;
+  dailyCap: number;
+  receivedAtMs: number;
+}
+
+export async function getActionStates(token: string) {
+  const res = await fetch(`${API_BASE}/api/action/states`, {
+    headers: getHeaders(token)
+  });
+  if (!res.ok) {
+    throw new ApiRequestError("Failed to fetch action states", res.status, null);
+  }
+  return (await res.json()) as {
+    ok: boolean;
+    states: Record<string, ServerActionState>;
+    serverNowMs: number;
+  };
+}
+
 export async function performAction(
   token: string,
   actionKey: string,
