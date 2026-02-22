@@ -512,7 +512,6 @@ function getNextTier(tier: Tier): Tier | null {
 
 export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenches }: BaseScreenProps) {
   const devMode = import.meta.env.DEV;
-  const mobileDebugEnabled = devMode && new URLSearchParams(window.location.search).get("mobileDebug") === "1";
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageWrapRef = useRef<HTMLDivElement | null>(null);
   const queueTitleRef = useRef<HTMLDivElement | null>(null);
@@ -552,7 +551,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
   const [debugBuildingId, setDebugBuildingId] = useState<BuildingId>(BUILDINGS[0]?.id ?? "booster_forge");
   const [pendingBuildId, setPendingBuildId] = useState<BuildingId>(BUILDINGS[0]?.id ?? "booster_forge");
   const [buildError, setBuildError] = useState<string>("");
-  const [debugVisible, setDebugVisible] = useState(true);
+  const [debugVisible] = useState(false);
   const [isBuildPickerOpen, setIsBuildPickerOpen] = useState(false);
   const [mechanicsState, setMechanicsState] = useState<MechanicsState>(() => clearDebuffs(loadMechanicsState()));
   const [actionMessage, setActionMessage] = useState<string>("");
@@ -2167,11 +2166,6 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
           </button>
           <button className="base-screen-back hud-btn" onClick={onTrenches}>Trenches</button>
           <button className="base-screen-back hud-btn" onClick={onBack}>Menu</button>
-          {devMode && (
-            <button className="base-screen-back hud-btn" onClick={() => setDebugVisible((prev) => !prev)}>
-              {debugVisible ? "Debug: ON" : "Debug: OFF"}
-            </button>
-          )}
         </div>
       </div>
 
@@ -2790,27 +2784,6 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
             </>
           )}
 
-          {devMode && (
-            <div className="base-build-actions">
-              <button
-                className="base-build-action"
-                onClick={() => {
-                  completeActiveNow();
-                }}
-                disabled={!buildQueue.active}
-              >
-                Complete active
-              </button>
-              <button
-                className="base-build-action danger"
-                onClick={() => {
-                  clearQueue();
-                }}
-              >
-                Clear queue
-              </button>
-            </div>
-          )}
           {buildError && <div className="base-build-cost" style={{ color: "#ffbdbd" }}>{buildError}</div>}
           {actionMessage && <div className="base-build-cost" style={{ color: "#d5fff0" }}>{actionMessage}</div>}
 
@@ -2835,25 +2808,6 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
         bonusText={swarmFinish?.perfect ? "+1 Ticket" : undefined}
         onClose={() => setSwarmFinish(null)}
       />
-
-      {mobileDebugEnabled && (
-        <div className="base-screen-mobile-debug">
-          <div>
-            vp {Math.round(viewport.width)}x{Math.round(viewport.height)}
-          </div>
-          <div>
-            rect l:{Math.round(drawRect.left)} t:{Math.round(drawRect.top)} w:{Math.round(drawRect.width)} h:
-            {Math.round(drawRect.height)}
-          </div>
-          <div>
-            cam x:{Math.round(cameraPx.x)} y:{Math.round(cameraPx.y)}
-          </div>
-          <div>
-            panX {Math.round(panMetrics.minCameraX)}..{Math.round(panMetrics.maxCameraX)} | panY{" "}
-            {Math.round(panMetrics.minCameraY)}..{Math.round(panMetrics.maxCameraY)}
-          </div>
-        </div>
-      )}
 
       {devMode && debugVisible && (
         <aside className="base-screen-debug">
