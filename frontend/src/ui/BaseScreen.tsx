@@ -709,7 +709,11 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
         const now = Date.now();
         const withTimestamp: Record<string, ServerActionState> = {};
         for (const [key, state] of Object.entries(result.states)) {
-          withTimestamp[key] = { ...state, receivedAtMs: now, cooldownEndMs: 0 };
+          const s = state as ServerActionState;
+          const cooldownEnd = s.lastActionMs > 0 && s.cooldownMs > 0
+            ? s.lastActionMs + s.cooldownMs
+            : 0;
+          withTimestamp[key] = { ...s, receivedAtMs: now, cooldownEndMs: cooldownEnd };
         }
         setServerActionStates(withTimestamp);
         serverStatesLoadedRef.current = true;
@@ -2033,6 +2037,16 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
           setActionMessage("Action blocked by server");
           return;
         }
+        setMechanicsState((prev) => {
+          const gc = prev.globalCharges ?? { lastAccrueAtMs: Date.now(), charges: 0 };
+          return {
+            ...prev,
+            globalCharges: {
+              ...gc,
+              charges: Math.max(0, gc.charges - 1)
+            }
+          };
+        });
         setActionMessage("Action complete");
       } catch (error) {
         if (error instanceof ApiRequestError) {
