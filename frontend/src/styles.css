@@ -3715,6 +3715,42 @@ body.base-screen-no-scroll {
   color: #ecfbff;
 }
 
+.base-build-header-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.base-build-header-row .base-build-cost {
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+.base-build-selected-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.base-build-selected-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ecfbff;
+}
+
+.base-build-selected-tag {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.65;
+  margin-left: 4px;
+}
+
+.base-build-selected-desc {
+  font-size: 11px;
+  color: #b3d6e4;
+  line-height: 1.3;
+}
+
 .base-build-empty-state {
   font-size: 13px;
   color: #b3d1db;
@@ -5010,11 +5046,12 @@ body.base-screen-no-scroll {
     right: 0;
     bottom: 0;
     width: 100%;
-    max-height: min(58vh, 480px);
-    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    max-height: min(52vh, 440px);
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
     border-radius: 18px 18px 0 0;
     border-width: 2px 2px 0 2px;
     z-index: 58;
+    gap: 6px;
     background: linear-gradient(180deg, rgba(22, 88, 118, 0.94), rgba(12, 58, 82, 0.96));
     backdrop-filter: blur(14px);
     overflow-y: auto;
@@ -5023,60 +5060,80 @@ body.base-screen-no-scroll {
   }
 
   .base-build-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 800;
-    margin-bottom: 2px;
+    margin-bottom: 0;
+  }
+
+  .base-build-header-row {
+    gap: 6px;
+  }
+
+  .base-build-selected-summary {
+    gap: 2px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .base-build-selected-name {
+    font-size: 12px;
+  }
+
+  .base-build-selected-desc {
+    font-size: 10px;
+    line-height: 1.25;
   }
 
   .base-sidebar-list {
-    max-height: min(26vh, 260px);
-    gap: 6px;
+    max-height: min(22vh, 200px);
+    gap: 4px;
     padding-right: 2px;
   }
 
   .base-sidebar-item {
-    padding: 8px;
-    gap: 8px;
-    border-radius: 12px;
+    padding: 6px;
+    gap: 6px;
+    border-radius: 10px;
   }
 
   .base-sidebar-item img {
-    width: 48px;
-    height: 48px;
-    flex: 0 0 48px;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
   }
 
   .base-sidebar-item-name {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
   }
 
   .base-sidebar-item-cost {
-    font-size: 11px;
-  }
-
-  .base-build-cost {
-    font-size: 11px;
-    line-height: 1.35;
-  }
-
-  .base-action-meta {
-    font-size: 11px;
-  }
-
-  .base-action-cost {
     font-size: 10px;
   }
 
+  .base-build-cost {
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .base-action-meta {
+    font-size: 10px;
+  }
+
+  .base-action-cost {
+    font-size: 9px;
+  }
+
   .base-action-row {
-    padding: 8px;
-    gap: 5px;
-    border-radius: 10px;
+    padding: 6px;
+    gap: 4px;
+    border-radius: 8px;
     border-width: 1.5px;
   }
 
   .base-actions-list {
-    gap: 6px;
+    gap: 4px;
   }
 
   /* Action chips — tighter */

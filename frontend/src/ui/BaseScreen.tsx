@@ -2580,9 +2580,11 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
         <div className="base-sidebar">
           {!selectedPlacement && (
             <>
-              <div className="base-build-title">Build</div>
-              <div className="base-build-cost">Tile: {selectedCellId}</div>
-              {!isHqBuilt && <div className="base-build-cost">Recommended: Build HQ first</div>}
+              <div className="base-build-header-row">
+                <div className="base-build-title">Build</div>
+                <div className="base-build-cost">{selectedCellId}</div>
+              </div>
+              {!isHqBuilt && <div className="base-build-cost" style={{ color: "#ffd080" }}>Build HQ first</div>}
               <div className="base-sidebar-list">
                 {isBuildPickerOpen &&
                   buildSidebarItems.map((building) => {
@@ -2612,29 +2614,18 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                     );
                   })}
                 {isBuildPickerOpen && buildSidebarItems.length === 0 && (
-                  <div className="base-build-cost">All unique buildings are already placed</div>
+                  <div className="base-build-cost">All buildings placed</div>
                 )}
               </div>
-              <div className="base-build-cost">
-                {BUILDINGS_BY_ID[pendingBuildId].name} | Tier 1
+              <div className="base-build-selected-summary">
+                <div className="base-build-selected-name">{BUILDINGS_BY_ID[pendingBuildId].name} <span className="base-build-selected-tag">{BUILDINGS_BY_ID[pendingBuildId].tagEn}</span></div>
+                <div className="base-build-selected-desc">{BUILDINGS_BY_ID[pendingBuildId].descriptionEn} {BUILDINGS_BY_ID[pendingBuildId].passiveEn}</div>
+                <div className="rr-chip-row">
+                  {BUILDINGS_BY_ID[pendingBuildId].actionsEn.map((action) => (
+                    <span key={action.id} className="rr-chip rr-chip--meta">{action.label}</span>
+                  ))}
+                </div>
               </div>
-              <div className="base-build-cost">
-                {BUILDINGS_BY_ID[pendingBuildId].descriptionEn}
-              </div>
-              <div className="base-build-cost">
-                {BUILDINGS_BY_ID[pendingBuildId].passiveEn}
-              </div>
-              <div className="base-build-cost">Actions:</div>
-              <div className={["base-actions-list", jamPulse ? "jam-pulse" : ""].join(" ")}>
-                {BUILDINGS_BY_ID[pendingBuildId].actionsEn.map((action) => (
-                  <div key={action.id} className="base-action-row">
-                    <div className="base-action-meta">
-                      <strong>{action.label}</strong> - {action.help}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="base-build-cost">Tier 1 cost: {formatCost(BUILDINGS_BY_ID[pendingBuildId].costsByTier[1])}</div>
               <div className="base-build-actions base-sidebar-actions">
                 <button
                   className="base-build-action base-sidebar-build-btn rr-shine-btn"
@@ -2649,22 +2640,22 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                     (buildQueue.active !== null && buildQueue.queued.length >= BASE_QUEUE_LIMIT)
                   }
                 >
-                  Build
+                  Build — {formatCost(BUILDINGS_BY_ID[pendingBuildId].costsByTier[1])}
                 </button>
               </div>
-              {pendingBuildEconomy && <div className="base-build-cost">Build cost: {formatCost(pendingBuildEconomy.cost as TierCost)}</div>}
               {pendingBuildEconomy?.cost.mon && dayIndex < 2 && (
-                <div className="base-build-cost">MON required after Day 2</div>
+                <div className="base-build-cost" style={{ color: "#ffd080" }}>MON unlocks Day 2</div>
               )}
             </>
           )}
 
           {selectedPlacement && selectedBuildingDef && (
             <>
-              <div className="base-build-title">Details</div>
-              <div className="base-build-cost">{selectedBuildingDef.name} | Tier {selectedPlacement.tier}</div>
-              <div className="base-build-cost">{selectedBuildingDef.descriptionEn}</div>
-              <div className="base-build-cost">{selectedBuildingDef.passiveEn}</div>
+              <div className="base-build-header-row">
+                <div className="base-build-title">{selectedBuildingDef.name}</div>
+                <div className="base-build-cost">Tier {selectedPlacement.tier}</div>
+              </div>
+              <div className="base-build-selected-desc">{selectedBuildingDef.descriptionEn} {selectedBuildingDef.passiveEn}</div>
               <div className="base-actions-list">
                 {selectedBuildingDef.actionsEn.map((action) => {
                   const actionKey = getActionCooldownKey(selectedCellId, selectedPlacement.buildingId, action.id);
