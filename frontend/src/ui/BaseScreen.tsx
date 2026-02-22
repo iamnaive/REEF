@@ -2708,6 +2708,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
               <div className="base-build-header-row">
                 <div className="base-build-title">Build</div>
                 <div className="base-build-cost">{selectedCellId}</div>
+                <button className="base-sidebar-close" onClick={() => setSelectedCellId(null)} aria-label="Close">&times;</button>
               </div>
               {!isHqBuilt && <div className="base-build-cost" style={{ color: "#ffd080" }}>Build HQ first</div>}
               <div className="base-sidebar-list">
@@ -2779,6 +2780,7 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
               <div className="base-build-header-row">
                 <div className="base-build-title">{selectedBuildingDef.name}</div>
                 <div className="base-build-cost">Tier {selectedPlacement.tier}</div>
+                <button className="base-sidebar-close" onClick={() => setSelectedCellId(null)} aria-label="Close">&times;</button>
               </div>
               <div className="base-build-selected-desc">{selectedBuildingDef.descriptionEn} {selectedBuildingDef.passiveEn}</div>
               <div className="base-actions-list">
