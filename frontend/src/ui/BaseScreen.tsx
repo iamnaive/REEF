@@ -2575,7 +2575,9 @@ export function BaseScreen({ token, soundEnabled, onToggleSound, onBack, onTrenc
                 left: toast.x * mapScaleX,
                 top: toast.y * mapScaleY
               }}
-              onClick={() => {
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
                 if (toast.dismissing) return;
                 dismissMapToast(toast.id, toast.debuff);
               }}
